@@ -1,0 +1,38 @@
+# Production-style stack: PostgreSQL + the ERP app.
+# 1) cp .env.example .env  and set real values (POSTGRES_PASSWORD, AUTH_SECRET, SEED_ADMIN_PASSWORD)
+# 2) docker compose up -d --build
+# 3) docker compose run --rm app npx prisma migrate deploy
+# 4) docker compose run --rm -e SEED_DEMO=false app npx tsx prisma/seed.ts
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: waste_erp
+      POSTGRES_USER: erp
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U erp -d waste_erp"]
+      interval: 10s
+      retries: 5
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://erp:${POSTGRES_PASSWORD}@db:5432/waste_erp?schema=public
+      UPLOAD_DIR: /app/storage/uploads
+    ports:
+      - "3000:3000"
+    volumes:
+      - uploads:/app/storage/uploads
+
+volumes:
+  pgdata:
+  uploads:

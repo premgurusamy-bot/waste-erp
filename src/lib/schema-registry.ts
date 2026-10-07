@@ -1,0 +1,40 @@
+import * as v from "./validation";
+
+/** Schemas that client forms can reference by key (zod schemas can't cross the server/client boundary as props). */
+export const SCHEMAS = {
+  customer: v.customerSchema,
+  customerContact: v.customerContactSchema,
+  site: v.siteSchema,
+  wasteCategory: v.wasteCategorySchema,
+  wasteType: v.wasteTypeSchema,
+  vehicle: v.vehicleSchema,
+  driver: v.driverSchema,
+  buyer: v.buyerSchema,
+  supplier: v.supplierSchema,
+  location: v.locationSchema,
+  expenseCategory: v.expenseCategorySchema,
+  gstRate: v.gstRateSchema,
+  inventoryItem: v.inventoryItemSchema,
+  contract: v.contractSchema,
+  rate: v.rateSchema,
+  rateRevision: v.rateRevisionSchema,
+  pickup: v.pickupSchema,
+  schedule: v.scheduleSchema,
+  assign: v.assignSchema,
+  reschedule: v.rescheduleSchema,
+  collection: v.collectionSchema,
+  gateIn: v.gateInSchema,
+  gateOut: v.gateOutSchema,
+  netOverride: v.netOverrideSchema,
+  stockMovement: v.stockMovementSchema,
+  expense: v.expenseSchema,
+  fuel: v.fuelSchema,
+  maintenance: v.maintenanceSchema,
+  ledgerAccount: v.ledgerAccountSchema,
+  changePassword: v.changePasswordSchema,
+  company: v.companySchema,
+  gstSettings: v.gstSettingsSchema,
+  sequence: v.sequenceSchema,
+} as const;
+
+export type SchemaKey = keyof typeof SCHEMAS;

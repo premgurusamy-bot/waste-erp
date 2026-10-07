@@ -1,0 +1,44 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --color-brand-50: #ecfdf3;
+  --color-brand-100: #d1fadf;
+  --color-brand-200: #a6f4c5;
+  --color-brand-300: #6ce9a6;
+  --color-brand-400: #32d583;
+  --color-brand-500: #12b76a;
+  --color-brand-600: #039855;
+  --color-brand-700: #027a48;
+  --color-brand-800: #05603a;
+  --color-brand-900: #054f31;
+  --color-navy-50: #eef3fa;
+  --color-navy-100: #d6e2f2;
+  --color-navy-200: #aec4e4;
+  --color-navy-300: #7e9fcf;
+  --color-navy-400: #4f78b4;
+  --color-navy-500: #335b96;
+  --color-navy-600: #244677;
+  --color-navy-700: #1b365d;
+  --color-navy-800: #142844;
+  --color-navy-900: #0d1b2f;
+  --color-surface: #f4f6f8;
+}
+
+@layer base {
+  html { -webkit-text-size-adjust: 100%; }
+  body { @apply bg-surface text-slate-800 antialiased; }
+  input[type="number"]::-webkit-inner-spin-button { opacity: 0.4; }
+  :focus-visible { @apply outline-2 outline-offset-2 outline-brand-500; }
+}
+
+@layer components {
+  .num { font-variant-numeric: tabular-nums; }
+}
+
+@media print {
+  aside, header, .no-print { display: none !important; }
+  main { padding: 0 !important; margin: 0 !important; }
+  body { background: white !important; }
+  .print-area { box-shadow: none !important; border: none !important; }
+}
