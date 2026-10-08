@@ -1,6 +1,4 @@
-import fs from "node:fs";
 import ExcelJS from "exceljs";
-import JSZip from "jszip";
 import { SHEETS, INFO_SHEET, type SheetDef, type SheetKey } from "./sheets.js";
 import { canon, cellPrimitive, CellError, sheetHash, overallChecksum } from "./canonical.js";
 import { FINANCIAL_LABELS } from "./financials.js";
@@ -29,46 +27,23 @@ export type ParsedBackup = {
 
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
 
-/**
- * Sheet number (xl/worksheets/sheetN.xml) -> sheet name, read from the workbook index.
- * The streaming reader cannot always name a sheet itself, because writers may store workbook.xml after the sheets.
- */
-async function workbookIndex(filePath: string): Promise<{ names: Map<number, string>; strings: string[] }> {
-  const zip = await JSZip.loadAsync(await fs.promises.readFile(filePath));
-  const wbXml = (await zip.file("xl/workbook.xml")?.async("string")) ?? "";
-  const relXml = (await zip.file("xl/_rels/workbook.xml.rels")?.async("string")) ?? "";
-  const rels = new Map<string, string>();
-  for (const m of relXml.matchAll(/<Relationship\b[^>]*>/g)) {
-    const id = m[0].match(/\bId="([^"]+)"/)?.[1];
-    const target = m[0].match(/\bTarget="([^"]+)"/)?.[1];
-    if (id && target) rels.set(id, target);
-  }
-  const out = new Map<number, string>();
-  const unescape = (s: string) => s.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'");
-  for (const m of wbXml.matchAll(/<sheet\b[^>]*>/g)) {
-    const name = m[0].match(/\bname="([^"]+)"/)?.[1];
-    const rid = m[0].match(/\br:id="([^"]+)"/)?.[1];
-    const n = rid ? rels.get(rid)?.match(/sheet(\d+)\.xml$/)?.[1] : undefined;
-    if (name && n) out.set(Number(n), unescape(name));
-  }
-  // shared strings: the streaming reader returns { sharedString: n } when they are stored after the sheets (Excel does this)
-  const ssXml = (await zip.file("xl/sharedStrings.xml")?.async("string")) ?? "";
-  const strings: string[] = [];
-  for (const si of ssXml.matchAll(/<si>([\s\S]*?)<\/si>/g)) {
-    const text = [...si[1].replace(/<rPh\b[\s\S]*?<\/rPh>/g, "").matchAll(/<t(?:\s[^>]*)?>([\s\S]*?)<\/t>/g)].map((t) => t[1]).join("");
-    strings.push(unescape(text).replace(/&#(\d+);/g, (_, d) => String.fromCharCode(Number(d))).replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCharCode(parseInt(h, 16))));
-  }
-  return { names: out, strings };
+function rowValues(row: ExcelJS.Row): any[] {
+  const v = row.values as any[];
+  return Array.isArray(v) ? v.slice(1).map(cellPrimitive) : [];
 }
 
-/** Read an ERP backup / import workbook into canonical strings. Never touches the database. */
+function rowsOf(ws: ExcelJS.Worksheet): ExcelJS.Row[] {
+  const out: ExcelJS.Row[] = [];
+  ws.eachRow({ includeEmpty: false }, (r) => { out.push(r); });
+  return out;
+}
+
+/**
+ * Read an ERP backup / import workbook into canonical strings. Never touches the database.
+ * Uses the in-memory reader on purpose: the streaming reader of ExcelJS can silently skip sheets,
+ * which is unacceptable for a restore.
+ */
 export async function readBackupWorkbook(filePath: string): Promise<ParsedBackup> {
-  const { names, strings } = await workbookIndex(filePath);
-  const rowValues = (row: ExcelJS.Row): any[] => {
-    const v = row.values as any[];
-    if (!Array.isArray(v)) return [];
-    return v.slice(1).map((x) => (x && typeof x === "object" && "sharedString" in x ? strings[x.sharedString] ?? null : cellPrimitive(x)));
-  };
   const byName = new Map(SHEETS.map((d) => [norm(d.name), d]));
   // also accept the sheet label without its number prefix ("Customers"), for hand-made import files
   for (const d of SHEETS) byName.set(norm(d.name.replace(/^\d+_/, "")), d);
@@ -79,14 +54,15 @@ export async function readBackupWorkbook(filePath: string): Promise<ParsedBackup
     computedChecksum: "", computedSheetHashes: {},
   };
 
-  const reader = new ExcelJS.stream.xlsx.WorkbookReader(filePath, { worksheets: "emit", sharedStrings: "cache", hyperlinks: "ignore", styles: "cache", entries: "emit" } as any);
-  for await (const ws of reader as any) {
-    const wsName: string = names.get(Number(ws.id)) ?? ws.name;
-    if (wsName === INFO_SHEET) {
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.readFile(filePath);
+
+  for (const ws of wb.worksheets) {
+    if (ws.name === INFO_SHEET) {
       out.hasInfo = true;
       let section: "fields" | "sheets" | "fin" | "other" = "fields";
       const labelToKey = new Map(Object.entries(FINANCIAL_LABELS).map(([k, l]) => [l, k]));
-      for await (const row of ws) {
+      for (const row of rowsOf(ws)) {
         if (row.number === 1) continue;
         const [a, b, c] = rowValues(row);
         const A = a === null || a === undefined ? "" : String(a).trim();
@@ -100,14 +76,16 @@ export async function readBackupWorkbook(filePath: string): Promise<ParsedBackup
       }
       continue;
     }
-    const def = byName.get(norm(wsName));
-    if (!def) { out.unknownSheets.push(wsName); for await (const _ of ws) { /* drain */ } continue; }
+    const def = byName.get(norm(ws.name));
+    if (!def) { out.unknownSheets.push(ws.name); continue; }
     const ps = out.sheets[def.key];
     ps.present = true;
-    let colIndex: number[] = []; // def column -> file column index (or -1)
-    for await (const row of ws) {
+    let colIndex: number[] = def.columns.map(() => -1); // def column -> file column index (or -1)
+    let headerSeen = false;
+    for (const row of rowsOf(ws)) {
       const vals = rowValues(row);
-      if (row.number === 1) {
+      if (!headerSeen) {
+        headerSeen = true;
         const headers = vals.map((h) => norm(String(h ?? "")));
         colIndex = def.columns.map((c) => {
           let i = headers.indexOf(norm(c.header));
@@ -138,6 +116,7 @@ export async function readBackupWorkbook(filePath: string): Promise<ParsedBackup
       });
       ps.rows.push({ rowNumber: row.number, cells, issues });
     }
+    if (!headerSeen) def.columns.forEach((c) => { ps.missingColumns.push(c.header); if (c.required) ps.missingRequiredColumns.push(c.header); });
   }
 
   const parts = SHEETS.map((def) => {

@@ -76,12 +76,12 @@ export async function createExcelBackup(type: BackupType, createdBy: string, opt
       where: { id: rec.id },
       data: {
         status: verified ? "VERIFIED" : "CORRUPTED", verified, verifiedAt: verified ? new Date() : null, checksum: written.checksum,
-        records: written.totalRecords, sizeBytes: size, dbFileName: db ? path.basename(db.dump ?? db.snapshot) : null,
+        records: written.totalRecords, sizeBytes: size, dbFileName: db ? path.basename((db.dump ?? db.snapshot)!) : null,
         message: verified ? null : v.message,
       },
     });
     await prisma.auditLog.create({ data: { userName: createdBy, action: "BACKUP", entityType: "BACKUP", recordCode: fileName, newValue: { type, records: written.totalRecords, verified } } });
-    log(`${type} backup ${fileName} records=${written.totalRecords} verified=${verified}${db ? ` db=${path.basename(db.snapshot)}${db.dump ? `,${path.basename(db.dump)}` : ""}` : ""}`);
+    log(`${type} backup ${fileName} records=${written.totalRecords} verified=${verified}${db ? ` db=${[db.snapshot, db.dump].filter(Boolean).map((p) => path.basename(p!)).join(",")}` : ""}`);
     if (!verified) throw new Error(`Backup was written but failed verification: ${v.message}`);
     await archiveMonthly(filePath, type);
     return { id: rec.id, backupId, filePath, fileName, checksum: written.checksum, totalRecords: written.totalRecords, counts: written.counts, verified, dbSnapshot: db?.snapshot, dbDump: db?.dump };
@@ -153,7 +153,7 @@ export async function exportAll(createdBy: string): Promise<{ zipPath: string; f
     const manifest = {
       export: zipName, createdAt: new Date().toISOString(), createdBy, appVersion: APP_VERSION, schemaVersion: SCHEMA_VERSION,
       excel: { file: "Excel/GRL_ERP_DATA.xlsx", checksum: excel.checksum, records: excel.totalRecords, counts: excel.counts },
-      database: { snapshot: `Database/${path.basename(db.snapshot)}`, pgDump: db.dump ? `Database/${path.basename(db.dump)}` : null },
+      database: { snapshot: db.snapshot ? `Database/${path.basename(db.snapshot)}` : null, pgDump: db.dump ? `Database/${path.basename(db.dump)}` : null },
       documents: { total: docs.total, missing: docs.missing },
     };
     await new Promise<void>((resolve, reject) => {
@@ -163,7 +163,7 @@ export async function exportAll(createdBy: string): Promise<{ zipPath: string; f
       zip.on("error", reject);
       zip.pipe(out);
       zip.file(excel.filePath, { name: "Excel/GRL_ERP_DATA.xlsx" });
-      zip.file(db.snapshot, { name: `Database/${path.basename(db.snapshot)}` });
+      if (db.snapshot) zip.file(db.snapshot, { name: `Database/${path.basename(db.snapshot)}` });
       if (db.dump) zip.file(db.dump, { name: `Database/${path.basename(db.dump)}` });
       for (const f of fs.readdirSync(UPLOAD_DIR)) zip.file(path.join(UPLOAD_DIR, f), { name: `Documents/${f}` });
       zip.file(docs.manifestPath, { name: "Manifest/document_manifest.json" });

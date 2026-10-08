@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>GRL ERP</title>
+<style>
+  body { margin: 0; font-family: Roboto, "Segoe UI", Arial, sans-serif; background: #1f3a5f; color: #1c2430; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 16px; box-sizing: border-box; }
+  .card { background: #fff; border-radius: 14px; padding: 22px; width: 100%; max-width: 380px; box-shadow: 0 20px 50px rgba(0,0,0,.3); }
+  h1 { color: #1f3a5f; font-size: 22px; margin: 0; }
+  p { color: #555; font-size: 14px; line-height: 1.4; }
+  label { font-size: 13px; color: #555; }
+  input { width: 100%; box-sizing: border-box; font-size: 17px; padding: 12px; border: 1px solid #c9d2de; border-radius: 8px; margin-top: 4px; }
+  button { width: 100%; margin-top: 14px; padding: 14px; font-size: 16px; font-weight: 600; border: none; border-radius: 8px; background: #1f3a5f; color: #fff; }
+  .msg { margin-top: 12px; padding: 10px; border-radius: 8px; font-size: 14px; display: none; }
+  .err { display: block; background: #fdecea; color: #7b241c; } .ok { display: block; background: #e6f5ec; color: #145a32; }
+  .small { font-size: 12px; color: #777; margin-top: 14px; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>G ROAD LINES ERP</h1>
+  <p>Type the address of the ERP on your office computer. It is shown on the office computer in <b>Settings</b> or as <b>http://192.168.x.x:4000</b>. The phone must be on the same Wi-Fi.</p>
+  <label>Server address<input id="addr" inputmode="url" autocapitalize="off" autocomplete="off" placeholder="192.168.1.20:4000" /></label>
+  <button id="go">Connect</button>
+  <div id="msg" class="msg"></div>
+  <p class="small">All data stays on the office server. Uninstalling this app never deletes company data.</p>
+</div>
+<script>
+  var KEY = "grl.server";
+  var $ = function (id) { return document.getElementById(id); };
+  function normalise(a) {
+    a = (a || "").trim().replace(/\/+$/, "");
+    if (!a) return "";
+    if (!/^https?:\/\//i.test(a)) a = "http://" + a;
+    if (!/:\d+$/.test(a.replace(/^https?:\/\//, "")) && /^http:/.test(a)) a = a + ":4000";
+    return a;
+  }
+  function show(ok, t) { $("msg").className = "msg " + (ok ? "ok" : "err"); $("msg").textContent = t; }
+  function connect(addr, auto) {
+    var url = normalise(addr);
+    if (!url) { show(false, "Type the server address."); return; }
+    show(true, "Connecting to " + url + " ...");
+    var done = false;
+    var timer = setTimeout(function () { if (!done) { done = true; show(false, "Cannot reach " + url + ". Is the phone on the office Wi-Fi and the ERP running on the office computer?"); } }, 8000);
+    fetch(url + "/api/health", { mode: "no-cors", cache: "no-store" }).then(function () {
+      if (done) return;
+      done = true; clearTimeout(timer);
+      try { localStorage.setItem(KEY, url); } catch (e) {}
+      location.href = url + "/";
+    }).catch(function () {
+      if (done) return;
+      done = true; clearTimeout(timer);
+      show(false, "Cannot reach " + url + ". Check the address and the Wi-Fi." + (auto ? " You can change the address above." : ""));
+    });
+  }
+  var saved = null;
+  try { saved = localStorage.getItem(KEY); } catch (e) {}
+  if (saved) { $("addr").value = saved.replace(/^http:\/\//, ""); if (location.hash !== "#change") connect(saved, true); }
+  $("go").onclick = function () { connect($("addr").value, false); };
+  $("addr").onkeydown = function (e) { if (e.key === "Enter") connect($("addr").value, false); };
+</script>
+</body>
+</html>

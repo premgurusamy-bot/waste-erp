@@ -4,10 +4,39 @@ import { prisma } from "./db.js";
 import { autoBackupIfDue } from "./backup/service.js";
 import { refreshNotifications } from "./services/alerts.js";
 import { APP_VERSION } from "../shared/calc.js";
+import { applyMigrations, findMigrationsDir } from "./migrate.js";
+import { databaseBackup } from "./backup/database-backup.js";
+import { stamp } from "./lib/util.js";
+
+/**
+ * Bring the database up to date. When the application version changed (an update was installed),
+ * a PRE-UPDATE database backup is taken first, while the data still has the previous layout.
+ */
+export async function prepareDatabase() {
+  let previous: string | null = null;
+  try {
+    previous = (await prisma.setting.findUnique({ where: { key: "local.appVersion" } }))?.value ?? null;
+  } catch { /* brand-new database: no tables yet */ }
+  if (previous && previous !== APP_VERSION) {
+    try {
+      await databaseBackup(stamp(), "PRE_UPDATE_DB");
+      console.log(`[update] ${previous} -> ${APP_VERSION}: pre-update database backup created`);
+    } catch (e) {
+      console.error("[update] pre-update backup failed:", (e as Error).message);
+    }
+  }
+  const dir = findMigrationsDir();
+  if (dir && process.env.GRL_AUTO_MIGRATE !== "false") {
+    const applied = await applyMigrations(dir);
+    if (applied.length) console.log(`[database] applied migrations: ${applied.join(", ")}`);
+  }
+  await prisma.setting.upsert({ where: { key: "local.appVersion" }, update: { value: APP_VERSION }, create: { key: "local.appVersion", value: APP_VERSION } });
+}
 
 export async function startServer(port = config.port, host = config.host) {
   ensureDirs();
   await prisma.$connect();
+  await prepareDatabase();
   const app = createApp();
   const server = await new Promise<import("node:http").Server>((resolve) => {
     const s = app.listen(port, host, () => resolve(s));

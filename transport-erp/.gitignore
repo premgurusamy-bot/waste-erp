@@ -13,3 +13,4 @@ coverage/
 scratch/
 storage-test/
 storage/
+storage-perf/

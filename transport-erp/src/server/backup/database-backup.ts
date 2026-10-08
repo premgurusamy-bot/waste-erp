@@ -84,9 +84,17 @@ export async function pgDump(filePath: string): Promise<boolean> {
 
 export async function databaseBackup(stamp: string, prefix = "GRL_DB") {
   fs.mkdirSync(BACKUP_DIRS.database, { recursive: true });
-  const snapshot = path.join(BACKUP_DIRS.database, `${prefix}_SNAPSHOT_${stamp}.json.gz`);
-  const rows = await writeSnapshot(snapshot);
+  const snapshotPath = path.join(BACKUP_DIRS.database, `${prefix}_SNAPSHOT_${stamp}.json.gz`);
+  let snapshot: string | null = null, rows = 0;
+  try {
+    rows = await writeSnapshot(snapshotPath);
+    snapshot = snapshotPath;
+  } catch (e) {
+    // e.g. right after an update, when the tables still have the previous layout; pg_dump below still works
+    console.warn("[backup] JSON snapshot failed:", (e as Error).message);
+  }
   const dump = path.join(BACKUP_DIRS.database, `${prefix}_${stamp}.dump`);
   const dumped = await pgDump(dump);
+  if (!snapshot && !dumped) throw new Error("Database backup failed (no snapshot and no pg_dump).");
   return { snapshot, dump: dumped ? dump : null, rows };
 }

@@ -363,6 +363,11 @@ export function createApp() {
   api.put("/roles", async (req, res) => res.json(await admin.saveRolePermissions(ctxOf(req), req.body)));
   api.get("/audit", async (req, res) => res.json(await admin.listAudit(ctxOf(req), req.query)));
   api.get("/license", async (req, res) => { ctxOf(req); res.json(await admin.licenseInfo()); });
+  api.get("/server-info", async (req, res) => {
+    ctxOf(req);
+    const addresses = Object.values(os.networkInterfaces()).flat().filter((i) => i && i.family === "IPv4" && !i.internal).map((i) => `http://${i!.address}:${config.port}`);
+    res.json({ addresses, port: config.port, backupRoot: BACKUP_DIRS.root });
+  });
   api.post("/license", async (req, res) => res.json(await admin.installLicense(ctxOf(req), String(req.body?.key ?? ""))));
 
   api.use((_req, _res, next) => next(new AppError(404, "Not found.")));

@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">GRL ERP</string>
+    <string name="title_activity_main">GRL ERP</string>
+    <string name="package_name">in.groadlines.erp</string>
+    <string name="custom_url_scheme">in.groadlines.erp</string>
+</resources>

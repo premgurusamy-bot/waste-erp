@@ -8,7 +8,7 @@ const fmtMoney = (n: any) => (n === null || n === undefined || n === "" ? "" : N
 export async function reportXlsx(r: ReportResult, company: string): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
   wb.creator = "G Road Lines ERP";
-  const ws = wb.addWorksheet(r.title.slice(0, 31), { views: [{ state: "frozen", ySplit: 4 }] });
+  const ws = wb.addWorksheet(r.title.replace(/[*?:\\/\[\]]/g, "-").slice(0, 31), { views: [{ state: "frozen", ySplit: 4 }] });
   ws.addRow([company]).font = { bold: true, size: 14 };
   ws.addRow([r.title]).font = { bold: true, size: 12 };
   ws.addRow([r.subtitle]);

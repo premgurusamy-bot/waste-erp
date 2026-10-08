@@ -96,15 +96,15 @@ export async function seedDemo(ctx: Ctx = systemCtx(ALL_PERMISSIONS, "Demo Seed"
     const km = dist[dp.name] ?? 200;
     const v = vehicles[i % 20];
     const freight = i === 0 ? 30000 : Math.round((km * r.int(48, 62) + 6000) / 100) * 100;
-    const hire = i === 0 ? 22000 : Math.round((freight * r.int(70, 80)) / 100 / 100) * 100;
+    const hire = i === 0 ? 22000 : Math.round((freight * r.int(62, 70)) / 100 / 100) * 100;
     const ageStatus = daysAgo > 14 ? "POD RECEIVED" : daysAgo > 7 ? r.pick(["DELIVERED", "POD RECEIVED"]) : daysAgo > 2 ? r.pick(["IN TRANSIT", "DELIVERED", "LOADED"]) : r.pick(["BOOKED", "ALLOCATED", "LOADED"]);
     const t = await saveTrip(ctx, {
       tripDate: date, customerId: i === 0 ? customers[0].id : customers[r.int(0, 19)].id, transporterId: transporters[i % 10].id, vehicleId: v.id, driverId: drivers[i % 30].id,
       loadingPointId: lp.id, deliveryPointId: dp.id, material: materials[i % materials.length], quantity: r.int(100, 600), unit: "BAGS", weightTons: r.int(8, 25), distanceKm: km,
       lrNumber: `LR${String(5000 + i)}`, lrDate: date, ewayBillNumber: `${String(3110000000 + i * 7713).slice(0, 12)}`,
       customerFreight: freight, transporterHire: hire,
-      loadingCharges: i === 0 ? 800 : r.int(3, 10) * 100, unloadingCharges: i === 0 ? 700 : r.int(3, 10) * 100, diesel: 0, toll: i === 0 ? 600 : r.int(2, 15) * 100,
-      rto: i === 0 ? 0 : r.int(0, 3) * 100, driverBata: i === 0 ? 900 : r.int(5, 12) * 100, otherExpense: 0, advance: i === 0 ? 10000 : Math.round(hire * 0.5 / 100) * 100,
+      loadingCharges: i === 0 ? 800 : r.int(2, 6) * 100, unloadingCharges: i === 0 ? 700 : r.int(2, 6) * 100, diesel: 0, toll: i === 0 ? 600 : r.int(2, 10) * 100,
+      rto: i === 0 ? 0 : r.int(0, 2) * 100, driverBata: i === 0 ? 900 : r.int(4, 8) * 100, otherExpense: 0, advance: i === 0 ? 10000 : Math.round(hire * 0.5 / 100) * 100,
       status: ageStatus === "POD RECEIVED" ? "DELIVERED" : ageStatus,
       items: [{ description: materials[i % materials.length], packages: r.int(50, 400), weightTons: r.int(8, 25), invoiceRef: `CI-${2000 + i}`, value: r.int(2, 30) * 50000 }],
     });
@@ -118,15 +118,15 @@ export async function seedDemo(ctx: Ctx = systemCtx(ALL_PERMISSIONS, "Demo Seed"
   for (let i = 0; i < 120; i++) {
     const t = trips[1 + (i % 99)];
     await saveExpense(ctx, {
-      expenseDate: t.tripDate, category: r.pick(tripCats), amount: r.int(2, 20) * 50, tripId: t.id, payee: r.pick(["Driver", "Toll Plaza", "Fuel Station", "Loading Contractor"]),
+      expenseDate: t.tripDate, category: r.pick(tripCats), amount: r.int(1, 8) * 50, tripId: t.id, payee: r.pick(["Driver", "Toll Plaza", "Fuel Station", "Loading Contractor"]),
       paymentMode: r.pick(["CASH", "UPI"]), paymentStatus: i % 15 === 0 ? "UNPAID" : "PAID", description: "Trip expense",
     });
   }
-  const officeCats = ["REPAIR", "MAINTENANCE", "OFFICE", "SALARY", "OTHER", "DIESEL"];
+  const officeCats = ["REPAIR", "MAINTENANCE", "OFFICE", "OTHER", "DIESEL"];
   for (let i = 0; i < 80; i++) {
-    const cat = officeCats[i % officeCats.length];
+    const cat = i % 27 === 0 ? "SALARY" : officeCats[i % officeCats.length];
     await saveExpense(ctx, {
-      expenseDate: addDays(today, -r.int(0, 75)), category: cat, amount: cat === "SALARY" ? r.int(15, 25) * 1000 : r.int(5, 60) * 100,
+      expenseDate: addDays(today, -r.int(0, 75)), category: cat, amount: cat === "SALARY" ? r.int(15, 25) * 1000 : r.int(3, 25) * 100,
       vehicleId: ["REPAIR", "MAINTENANCE", "DIESEL"].includes(cat) ? vehicles[r.int(0, 2)].id : null,
       payee: cat === "SALARY" ? r.pick(["Office Staff", "Accountant"]) : cat === "OFFICE" ? "Office supplies" : "Workshop",
       paymentMode: r.pick(["CASH", "BANK", "UPI"]), paymentStatus: i % 10 === 0 ? "UNPAID" : "PAID", description: `${cat.toLowerCase()} expense`,
@@ -181,10 +181,10 @@ export async function seedDemo(ctx: Ctx = systemCtx(ALL_PERMISSIONS, "Demo Seed"
   }
 
   // ---- targets
-  await saveTarget(ctx, { period: "MONTHLY", metric: "PROFIT", amount: 500000, date: today });
-  await saveTarget(ctx, { period: "DAILY", metric: "PROFIT", amount: 15000, date: today });
-  await saveTarget(ctx, { period: "WEEKLY", metric: "PROFIT", amount: 100000, date: today });
-  await saveTarget(ctx, { period: "YEARLY", metric: "PROFIT", amount: 6000000, date: today });
+  await saveTarget(ctx, { period: "MONTHLY", metric: "PROFIT", amount: 100000, date: today });
+  await saveTarget(ctx, { period: "DAILY", metric: "PROFIT", amount: 3500, date: today });
+  await saveTarget(ctx, { period: "WEEKLY", metric: "PROFIT", amount: 25000, date: today });
+  await saveTarget(ctx, { period: "YEARLY", metric: "PROFIT", amount: 1200000, date: today });
   return { skipped: false, trips: trips.length };
 }
 
