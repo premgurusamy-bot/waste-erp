@@ -42,6 +42,7 @@ SMTP_HOST=""
 }
 
 Run "Installing components (takes a few minutes)" "npm install"
+Run "Preparing the database client" "npx prisma generate"
 Step "Creating tables in the waste_erp database"
 cmd /c "npx prisma migrate deploy"
 if ($LASTEXITCODE -ne 0) { Remove-Item ".env" -ErrorAction SilentlyContinue; Fail "Could not connect to the database. Check that the database waste_erp exists in pgAdmin and that the password is right, then double-click SETUP-WINDOWS.bat again (it will ask for the password again)." }
