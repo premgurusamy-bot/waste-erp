@@ -1,7 +1,9 @@
 import { Pencil } from "lucide-react";
-import { companyAction, sequenceAction, settingAction } from "@/app/actions/settings";
+import { companyAction, licenseAction, sequenceAction, settingAction } from "@/app/actions/settings";
 import { FormDialog } from "@/components/forms/confirm-action";
 import { EntityForm } from "@/components/forms/entity-form";
+import { LicenseForm } from "@/components/forms/license-form";
+import { Badge, type Tone } from "@/components/ui/badge";
 import { SettingForm } from "@/components/forms/setting-form";
 import { Card, CardContent } from "@/components/ui/card";
 import { DataTable } from "@/components/ui/data-table";
@@ -11,6 +13,7 @@ import { STATE_OPTIONS, toFormValues } from "@/lib/fields";
 import { str, type SP } from "@/lib/list-params";
 import { formatDateTime } from "@/lib/utils";
 import { requirePermission } from "@/server/auth/current-user";
+import { getLicenseStatus } from "@/server/license";
 import { emailConfigured } from "@/server/mail";
 
 export const metadata = { title: "Settings" };
@@ -23,11 +26,12 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   return (
     <>
       <PageHeader title="Settings" description="Company profile, document numbering and system options" />
-      <LinkTabs base="/settings" active={tab} tabs={[{ key: "company", label: "Company Profile" }, { key: "numbering", label: "Document Numbering" }, { key: "general", label: "General" }, { key: "system", label: "System & Backup" }]} />
+      <LinkTabs base="/settings" active={tab} tabs={[{ key: "company", label: "Company Profile" }, { key: "numbering", label: "Document Numbering" }, { key: "general", label: "General" }, { key: "system", label: "System & Backup" }, { key: "licence", label: "Licence" }]} />
       {tab === "company" && <Company manage={manage} />}
       {tab === "numbering" && <Numbering manage={manage} />}
       {tab === "general" && <General manage={manage} />}
       {tab === "system" && <System />}
+      {tab === "licence" && <Licence manage={manage} />}
     </>
   );
 }
@@ -129,6 +133,44 @@ async function System() {
           <pre className="overflow-x-auto rounded-lg bg-navy-900 p-3 text-xs text-brand-200">{`npm run backup            # writes backups/waste_erp_<timestamp>.dump + uploads archive
 npm run restore -- backups/waste_erp_<timestamp>.dump`}</pre>
           <p>Schedule the backup daily (cron) and copy the files off the server. Full instructions are in <b>DATABASE.md</b> and <b>DEPLOYMENT.md</b>.</p>
+        </CardContent>
+      </Section>
+    </div>
+  );
+}
+
+const LICENCE_BADGE: Record<string, [string, Tone]> = {
+  trial: ["Trial", "blue"],
+  active: ["Active", "green"],
+  expiring: ["Expiring soon", "amber"],
+  grace: ["Expired · grace period", "red"],
+  expired: ["Expired · view-only", "red"],
+  invalid: ["Invalid key", "red"],
+  mismatch: ["GSTIN mismatch", "red"],
+  clock: ["Check system date", "red"],
+};
+
+async function Licence({ manage }: { manage: boolean }) {
+  const s = await getLicenseStatus();
+  const [label, tone] = LICENCE_BADGE[s.state];
+  return (
+    <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+      <Section title="Licence Status">
+        <CardContent className="space-y-2 text-sm">
+          <p><Badge tone={tone}>{label}</Badge></p>
+          <p>{s.message}</p>
+          <dl className="grid grid-cols-[9rem_1fr] gap-y-1 pt-2">
+            <dt className="text-slate-500">Licensed to</dt><dd className="font-medium">{s.licensee ?? "—"}</dd>
+            <dt className="text-slate-500">GSTIN</dt><dd>{s.gstin ?? "Any"}</dd>
+            <dt className="text-slate-500">Valid until</dt><dd>{s.expires ?? "—"}</dd>
+            <dt className="text-slate-500">Active users allowed</dt><dd>{s.users ?? "Unlimited"}</dd>
+          </dl>
+        </CardContent>
+      </Section>
+      <Section title="Install or Renew">
+        <CardContent className="space-y-3 text-sm text-slate-600">
+          <p>Paste the licence key you received from your vendor. A renewal key replaces the current one; your data is not affected.</p>
+          {manage ? <LicenseForm action={licenseAction} /> : <p>Only an administrator can install a licence key.</p>}
         </CardContent>
       </Section>
     </div>

@@ -4,6 +4,7 @@ import { ALL_PERMISSIONS } from "@/lib/permissions";
 import { changePasswordSchema, passwordRule, userCreateSchema, userUpdateSchema } from "@/lib/validation";
 import { audit } from "../audit";
 import { assertCan, type Ctx } from "../context";
+import { assertUserSeatAvailable } from "../license";
 import { AppError } from "../errors";
 
 const MAX_FAILED = 5;
@@ -57,6 +58,7 @@ export async function createUser(ctx: Ctx, input: unknown) {
   return prisma.$transaction(async (tx) => {
     const exists = await tx.user.findUnique({ where: { username: i.username } });
     if (exists) throw new AppError("This username is already taken.", { username: "Already taken" });
+    await assertUserSeatAvailable(tx);
     const u = await tx.user.create({
       data: {
         username: i.username,
@@ -82,6 +84,7 @@ export async function updateUser(ctx: Ctx, input: unknown) {
     const before = await tx.user.findUnique({ where: { id: i.id }, include: { roles: true, permissions: { include: { permission: true } } } });
     if (!before) throw new AppError("User not found.");
     if (before.id === ctx.userId && i.status === "DISABLED") throw new AppError("You cannot disable your own account.");
+    if (before.status !== "ACTIVE" && i.status === "ACTIVE") await assertUserSeatAvailable(tx, before.id);
     const adminRole = await tx.role.findUnique({ where: { code: "ADMIN" } });
     if (adminRole && before.roles.some((r) => r.roleId === adminRole.id) && (!i.roleIds.includes(adminRole.id) || i.status === "DISABLED")) {
       const otherAdmins = await tx.user.count({ where: { id: { not: before.id }, status: "ACTIVE", roles: { some: { roleId: adminRole.id } } } });

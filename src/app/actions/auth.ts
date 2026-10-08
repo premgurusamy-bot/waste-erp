@@ -43,9 +43,9 @@ export async function changePasswordAction(values: Record<string, unknown>) {
     // Password change signs out every other session; re-issue this one.
     (await cookies()).set(SESSION_COOKIE, await signSession({ uid: u.id, sv: u.sessionVersion }), cookieOptions());
     return { id: u.id };
-  });
+  }, [], { allowUnlicensed: true });
 }
 
 export async function markReadAction(ids: string[]) {
-  return act(async (ctx) => markNotificationsRead(ctx.userId, ids.slice(0, 100)));
+  return act(async (ctx) => markNotificationsRead(ctx.userId, ids.slice(0, 100)), [], { allowUnlicensed: true });
 }

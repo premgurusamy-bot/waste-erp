@@ -1,6 +1,7 @@
 "use server";
 
 import { act } from "@/server/action";
+import { installLicense } from "@/server/license";
 import { setSetting, updateCompany, updateGstSettings, updateSequence } from "@/server/services/settings";
 
 export async function companyAction(values: Record<string, unknown>) {
@@ -14,4 +15,7 @@ export async function sequenceAction(values: Record<string, unknown>) {
 }
 export async function settingAction(key: string, value: string) {
   return act((ctx) => setSetting(ctx, key, value), ["/settings"]);
+}
+export async function licenseAction(key: string) {
+  return act((ctx) => installLicense(ctx, key), ["/settings", "/dashboard"], { allowUnlicensed: true });
 }

@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { getCtx } from "@/server/auth/current-user";
 import { toActionError } from "@/server/errors";
+import { assertLicenseWritable } from "@/server/license";
 import { saveDocument } from "@/server/services/documents";
 
 export async function POST(req: Request) {
   try {
     const ctx = await getCtx();
+    await assertLicenseWritable();
     const form = await req.formData();
     const file = form.get("file");
     if (!(file instanceof File)) return NextResponse.json({ error: "Choose a file to upload." }, { status: 400 });

@@ -2,6 +2,7 @@
   "name": "waste-erp",
   "version": "1.0.0",
   "private": true,
+  "license": "UNLICENSED",
   "description": "Waste Management ERP for non-hazardous waste collection, processing, recycling, billing and accounts",
   "scripts": {
     "dev": "next dev -p 3000",

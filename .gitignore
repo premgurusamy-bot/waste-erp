@@ -13,3 +13,8 @@ playwright-report/
 test-results/
 coverage/
 .DS_Store
+
+# Licensing: the vendor private key and issued keys never go into the repository
+licence-private*.pem
+*.pem
+licences/
