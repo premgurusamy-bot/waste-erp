@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { api, download } from "../api";
 import { useAuth } from "../auth";
 import { bytes, dateTime, displayDate, money } from "../format";
-import { Badge, Loading, Modal, PageHead, Tabs, TypedConfirm, useAction, useLoad, useToast, clearOptionCache } from "../components/ui";
+import { Badge, Field, Loading, Modal, PageHead, Tabs, TypedConfirm, useAction, useLoad, useToast, clearOptionCache } from "../components/ui";
 
 declare global {
   interface Window { grlDesktop?: { openPath: (which: string) => Promise<string>; backupDir: () => Promise<string> } }
@@ -63,7 +63,7 @@ function FilePicker({ onPicked, title }: { onPicked: (token: string, fileName: s
   );
 }
 
-function PlanView({ plan }: { plan: any }) {
+export function PlanView({ plan, forImport }: { plan: any; forImport?: boolean }) {
   const v = plan.verification;
   const info = plan.info ?? {};
   const counts = (k: string) => plan.sheets.find((s: any) => s.key === k)?.inFile ?? 0;
@@ -74,7 +74,7 @@ function PlanView({ plan }: { plan: any }) {
           <b>{v.checksumOk ? "✔ BACKUP VERIFIED" : "✖ VERIFICATION FAILED"}</b> {v.message}
           {v.damagedSheets?.length > 0 && <div className="small">Changed / damaged sheets: {v.damagedSheets.join(", ")}</div>}
         </div>
-      ) : <div className="alert amber">{v.message}</div>}
+      ) : forImport ? null : <div className="alert amber">{v.message}</div>}
       {v.isErpBackup && (
         <div className="health">
           <div>BACKUP DATE<b>{info["Backup Date"]} {info["Backup Time"]}</b></div>
@@ -111,7 +111,7 @@ function PlanView({ plan }: { plan: any }) {
   );
 }
 
-function ResultView({ r, onRollback }: { r: any; onRollback?: () => void }) {
+export function ResultView({ r, onRollback }: { r: any; onRollback?: () => void }) {
   if (!r.ok) {
     return (
       <div className="stack">
@@ -140,9 +140,9 @@ function ResultView({ r, onRollback }: { r: any; onRollback?: () => void }) {
   );
 }
 
-function RestoreWizard({ initialMode, onClose, onDone }: { initialMode: "FULL" | "MERGE" | "IMPORT"; onClose: () => void; onDone: () => void }) {
-  const [step, setStep] = useState<"file" | "mode" | "preview" | "result">("file");
-  const [file, setFile] = useState<{ token: string; fileName: string } | null>(null);
+function RestoreWizard({ initialMode, initialFile, onClose, onDone }: { initialMode: "FULL" | "MERGE" | "IMPORT"; initialFile?: { token: string; fileName: string }; onClose: () => void; onDone: () => void }) {
+  const [step, setStep] = useState<"file" | "mode" | "preview" | "result">(initialFile ? "mode" : "file");
+  const [file, setFile] = useState<{ token: string; fileName: string } | null>(initialFile ?? null);
   const [mode, setMode] = useState(initialMode);
   const [sheets, setSheets] = useState<string[]>(["customers"]);
   const [plan, setPlan] = useState<any>(null);
@@ -225,6 +225,7 @@ export function BackupPage() {
   const files = useLoad(() => api.get("/backup/files"), []);
   const [tab, setTab] = useState<"history" | "restores" | "files" | "retention">("history");
   const [wizard, setWizard] = useState<null | "FULL" | "IMPORT">(null);
+  const [wizardFile, setWizardFile] = useState<{ token: string; fileName: string } | undefined>();
   const [verify, setVerify] = useState(false);
   const [done, setDone] = useState<any>(null);
   const [rollbackId, setRollbackId] = useState<string | null>(null);
@@ -281,13 +282,16 @@ export function BackupPage() {
         <p className="muted small">Make a backup before reinstalling the application, updating the ERP, changing the database, restoring data or moving to another computer. Copy the Backup folder to a USB drive or Google Drive regularly.</p>
       </div>
 
+      <DriveCard onRestore={(f) => { setWizardFile(f); setWizard("FULL"); }} onChanged={reloadAll} />
+
       <div className="card">
         <Tabs tabs={[{ key: "history", label: "Backup history" }, { key: "restores", label: "Restore history" }, { key: "files", label: "Files on disk" }, { key: "retention", label: "Retention" }]} value={tab} onChange={setTab} />
         {tab === "history" && (!history.data ? <Loading /> : (
           <div className="table-wrap"><table>
-            <thead><tr><th>Backup Date</th><th>Backup Type</th><th>File Name</th><th className="num">Records</th><th>Status</th><th className="hide-mobile">Created By</th><th>Verified</th><th></th></tr></thead>
+            <thead><tr><th>Backup Date</th><th>Backup Type</th><th>File Name</th><th className="num">Records</th><th>Status</th><th className="hide-mobile">Created By</th><th>Verified</th><th>Google Drive</th><th></th></tr></thead>
             <tbody>{history.data.map((b: any) => (
               <tr key={b.id}><td className="nowrap">{dateTime(b.createdAt)}</td><td><Badge s={b.type} /></td><td className="mono">{b.fileName}</td><td className="num">{b.records.toLocaleString("en-IN")}</td><td><Badge s={b.status} />{b.message && <div className="neg small">{b.message}</div>}</td><td className="hide-mobile">{b.createdBy}</td><td>{b.verified ? "✔ " + dateTime(b.verifiedAt) : "—"}</td>
+                <td>{b.driveStatus === "NONE" ? <span className="muted small">—</span> : <span title={b.driveError ?? ""}><Badge s={b.driveStatus === "UPLOADED" ? "UPLOADED" : b.driveStatus} /></span>}</td>
                 <td>{["VERIFIED", "SUCCESS"].includes(b.status) && <button className="btn-sm" onClick={() => download(`/backup/download/${encodeURIComponent(b.fileName)}`)}>Download</button>}</td></tr>
             ))}</tbody>
           </table></div>
@@ -310,7 +314,7 @@ export function BackupPage() {
         {tab === "retention" && <Retention onDone={reloadAll} />}
       </div>
 
-      {wizard && <RestoreWizard initialMode={wizard} onClose={() => setWizard(null)} onDone={reloadAll} />}
+      {wizard && <RestoreWizard initialMode={wizard} initialFile={wizardFile} onClose={() => { setWizard(null); setWizardFile(undefined); }} onDone={reloadAll} />}
       {verify && <VerifyModal onClose={() => { setVerify(false); reloadAll(); }} />}
       {rollbackId && <TypedConfirm title="Roll back this restore?" word="ROLLBACK" busy={busy} onClose={() => setRollbackId(null)} onConfirm={doRollback} message="The data will be put back exactly as it was before that restore, from its PRE-RESTORE backup. (A safety backup of the current data is made first.)" />}
       {done && (
@@ -350,6 +354,103 @@ function Retention({ onDone }: { onDone: () => void }) {
       )}
       {confirm && <TypedConfirm title="Delete old backup files?" word="DELETE" busy={busy} onClose={() => setConfirm(false)} message={`${sel.length} backup file(s) will be permanently deleted from the backup folder.`}
         onConfirm={() => run(() => api.post("/backup/retention/delete", { files: sel, confirm: "DELETE" }), "Deleted").then(() => { setConfirm(false); setSel([]); plan.reload(); onDone(); })} />}
+    </div>
+  );
+}
+
+function DriveCard({ onRestore, onChanged }: { onRestore: (f: { token: string; fileName: string }) => void; onChanged: () => void }) {
+  const { can } = useAuth();
+  const st = useLoad(() => api.get("/gdrive/status"), []);
+  const [setup, setSetup] = useState(false);
+  const [client, setClient] = useState({ clientId: "", clientSecret: "" });
+  const [list, setList] = useState<any>(null);
+  const { busy, run } = useAction();
+  const toast = useToast();
+  if (!st.data) return <div className="card"><h2>GOOGLE DRIVE</h2><Loading error={st.error} /></div>;
+  const s = st.data;
+  const onServer = ["localhost", "127.0.0.1"].includes(location.hostname);
+  const connect = async () => {
+    const r = await run(() => api.post("/gdrive/connect"));
+    if (!r) return;
+    window.open(r.url, "_blank", "noopener");
+    toast("ok", "Sign in with your Google account in the browser, then come back here.");
+    const until = Date.now() + 5 * 60_000;
+    const poll = setInterval(async () => {
+      const x = await api.get("/gdrive/status").catch(() => null);
+      if (x?.connected || Date.now() > until) { clearInterval(poll); st.reload(); onChanged(); if (x?.connected) toast("ok", `Google Drive connected: ${x.email}`); }
+    }, 3000);
+  };
+  const toggleAuto = (on: boolean) => run(() => api.put("/settings", { "gdrive.autoUpload": on ? "true" : "false" }), on ? "Automatic upload ON" : "Automatic upload OFF").then(st.reload);
+  const restoreFrom = async (f: any) => {
+    const r = await run(() => api.post("/gdrive/stage", { fileId: f.id }));
+    if (r) onRestore({ token: r.token, fileName: r.fileName });
+  };
+  return (
+    <div className="card">
+      <div className="spread">
+        <h2>GOOGLE DRIVE (off-site copy)</h2>
+        {s.connected ? <Badge s="CONNECTED" /> : <Badge s="NOT CONNECTED" />}
+      </div>
+      {s.connected ? (
+        <div className="stack">
+          <div className="health">
+            <div>Google account<b>{s.email}</b></div>
+            <div>Last upload<b>{s.lastUploadAt ? dateTime(s.lastUploadAt) : "Not yet"}</b></div>
+            <div>Waiting / failed uploads<b className={s.pending ? "neg" : ""}>{s.pending}</b></div>
+            <div>Automatic upload<b>{s.autoUpload ? "ON" : "OFF"}</b></div>
+          </div>
+          <div className="muted small">Every verified backup (Excel + database), every full export and all document photos are copied to <b>My Drive › G Road Lines ERP Backup</b>. If the internet is down, uploads are retried every hour.</div>
+          <div className="row">
+            <button className="btn-primary" disabled={busy} onClick={() => run(() => api.post("/gdrive/sync"), "").then((r: any) => { if (r) toast(r.failed ? "err" : "ok", `Uploaded ${r.uploaded} backup(s), ${r.documents?.uploaded ?? 0} document(s)${r.failed ? `; ${r.failed} failed` : ""}`); st.reload(); onChanged(); })}>Upload now</button>
+            <button disabled={busy} onClick={() => run(() => api.get("/gdrive/files")).then((r) => r && setList(r))}>Backups in Google Drive</button>
+            {s.folderUrl && <a className="btn" href={s.folderUrl} target="_blank" rel="noopener noreferrer">Open folder in Drive</a>}
+            {can("settings.edit") && <button disabled={busy} onClick={() => toggleAuto(!s.autoUpload)}>{s.autoUpload ? "Turn automatic upload OFF" : "Turn automatic upload ON"}</button>}
+            {can("backup.restore") && <button className="btn-danger" disabled={busy} onClick={() => confirm("Disconnect Google Drive? Files already in Drive are kept.") && run(() => api.post("/gdrive/disconnect"), "Disconnected").then(st.reload)}>Disconnect</button>}
+          </div>
+          {list && (
+            <div className="table-wrap" style={{ maxHeight: 320 }}><table>
+              <thead><tr><th>Backup in Google Drive</th><th>Uploaded</th><th className="num">Size</th><th></th></tr></thead>
+              <tbody>
+                {[...list.excel, ...list.exports].length === 0 && <tr><td colSpan={4} className="empty">No backups in Drive yet</td></tr>}
+                {list.excel.map((f: any) => <tr key={f.id}><td className="mono">{f.name}</td><td>{dateTime(f.createdTime)}</td><td className="num">{bytes(Number(f.size ?? 0))}</td><td>{can("backup.restore") && <button className="btn-sm btn-gold" disabled={busy} onClick={() => restoreFrom(f)}>Restore</button>}</td></tr>)}
+                {list.exports.map((f: any) => <tr key={f.id}><td className="mono">{f.name}</td><td>{dateTime(f.createdTime)}</td><td className="num">{bytes(Number(f.size ?? 0))}</td><td><a href={f.webViewLink} target="_blank" rel="noopener noreferrer">Open</a></td></tr>)}
+              </tbody>
+            </table></div>
+          )}
+        </div>
+      ) : (
+        <div className="stack">
+          <div>Keep a copy of every backup in your own Google Drive (Gmail account), so the data survives even if this computer is lost or damaged.</div>
+          {!onServer && <div className="alert amber">Connect Google Drive from the office computer itself (open the ERP there at http://localhost:{location.port || "4000"}).</div>}
+          {can("backup.restore") ? (
+            <>
+              {!s.configured || setup ? (
+                <div className="card" style={{ background: "#f7f9fc" }}>
+                  <h3>One-time setup (about 5 minutes)</h3>
+                  <ol className="small" style={{ paddingLeft: 18, lineHeight: 1.6 }}>
+                    <li>Open <a href="https://console.cloud.google.com/" target="_blank" rel="noopener noreferrer">console.cloud.google.com</a> with your Gmail account and create a project “GRL ERP”.</li>
+                    <li><b>APIs &amp; Services → Library</b> → enable <b>Google Drive API</b>.</li>
+                    <li><b>OAuth consent screen</b> → External → app name “GRL ERP”, your email → add scope <span className="mono">…/auth/drive.file</span> → then click <b>PUBLISH APP</b> (otherwise Google disconnects it every 7 days).</li>
+                    <li><b>Credentials → Create credentials → OAuth client ID</b> → type <b>Web application</b> → Authorised redirect URI: <span className="mono">{s.redirectUri}</span></li>
+                    <li>Copy the Client ID and Client secret here:</li>
+                  </ol>
+                  <div className="form-grid">
+                    <Field label="Client ID"><input value={client.clientId} onChange={(e) => setClient({ ...client, clientId: e.target.value })} placeholder="….apps.googleusercontent.com" /></Field>
+                    <Field label="Client secret"><input type="password" value={client.clientSecret} onChange={(e) => setClient({ ...client, clientSecret: e.target.value })} /></Field>
+                  </div>
+                  <div style={{ marginTop: 10 }}><button className="btn-primary" disabled={busy || !client.clientId || !client.clientSecret} onClick={() => run(() => api.post("/gdrive/client", client), "Saved").then((r) => { if (r) { setSetup(false); st.reload(); } })}>Save</button></div>
+                  <p className="muted small">The ERP asks only for permission to its own files (drive.file): it cannot see your other Drive files or your e-mail. The secret and the sign-in token are stored encrypted on this computer.</p>
+                </div>
+              ) : (
+                <div className="row">
+                  <button className="btn-primary btn-lg" disabled={busy} onClick={connect}>Connect Google Drive</button>
+                  <button className="btn-sm" onClick={() => setSetup(true)}>Change Client ID</button>
+                </div>
+              )}
+            </>
+          ) : <div className="muted">Ask an administrator to connect Google Drive.</div>}
+        </div>
+      )}
     </div>
   );
 }

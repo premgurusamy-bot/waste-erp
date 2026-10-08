@@ -15,6 +15,7 @@ import { databaseBackup } from "./database-backup.js";
 import { stamp } from "../lib/util.js";
 import { APP_VERSION, SCHEMA_VERSION, backupAgeLevel, todayIst } from "../../shared/calc.js";
 import { getSettings } from "../services/settings.js";
+import { autoUploadEnabled, queueUpload, uploadBackup } from "../gdrive/sync.js";
 
 export type BackupType = "AUTOMATIC" | "MANUAL" | "PRE-RESTORE" | "PRE-UPDATE" | "EMERGENCY" | "EXPORT";
 
@@ -45,13 +46,13 @@ function uniquePath(dir: string, base: string, ext: string) {
   return p;
 }
 
-export type ExcelBackupResult = { id: string; backupId: string; filePath: string; fileName: string; checksum: string; totalRecords: number; counts: Record<string, number>; verified: boolean; dbSnapshot?: string | null; dbDump?: string | null };
+export type ExcelBackupResult = { id: string; drive: "PENDING" | "NONE"; backupId: string; filePath: string; fileName: string; checksum: string; totalRecords: number; counts: Record<string, number>; verified: boolean; dbSnapshot?: string | null; dbDump?: string | null };
 
 /**
  * Create a new Excel backup file (never overwrites), immediately read it back and verify the checksum,
  * and record it in the backup history.
  */
-export async function createExcelBackup(type: BackupType, createdBy: string, opts: { withDatabase?: boolean; dir?: string } = {}): Promise<ExcelBackupResult> {
+export async function createExcelBackup(type: BackupType, createdBy: string, opts: { withDatabase?: boolean; dir?: string; waitForDrive?: boolean } = {}): Promise<ExcelBackupResult> {
   ensureDirs();
   const now = new Date();
   const st = stamp(now);
@@ -84,7 +85,14 @@ export async function createExcelBackup(type: BackupType, createdBy: string, opt
     log(`${type} backup ${fileName} records=${written.totalRecords} verified=${verified}${db ? ` db=${[db.snapshot, db.dump].filter(Boolean).map((p) => path.basename(p!)).join(",")}` : ""}`);
     if (!verified) throw new Error(`Backup was written but failed verification: ${v.message}`);
     await archiveMonthly(filePath, type);
-    return { id: rec.id, backupId, filePath, fileName, checksum: written.checksum, totalRecords: written.totalRecords, counts: written.counts, verified, dbSnapshot: db?.snapshot, dbDump: db?.dump };
+    // Level 4: copy to Google Drive (in the background; retried hourly if the internet is down)
+    let drive: "PENDING" | "NONE" = "NONE";
+    if (!opts.dir && (await autoUploadEnabled().catch(() => false))) {
+      await prisma.backupRecord.update({ where: { id: rec.id }, data: { driveStatus: "PENDING" } });
+      drive = "PENDING";
+      if (!opts.waitForDrive) queueUpload(rec.id);
+    }
+    return { id: rec.id, drive, backupId, filePath, fileName, checksum: written.checksum, totalRecords: written.totalRecords, counts: written.counts, verified, dbSnapshot: db?.snapshot, dbDump: db?.dump };
   } catch (e) {
     await prisma.backupRecord.update({ where: { id: rec.id }, data: { status: "FAILED", message: (e as Error).message.slice(0, 1000) } }).catch(() => {});
     log(`${type} backup FAILED: ${(e as Error).message}`);
@@ -133,14 +141,19 @@ export async function backupSettingsFile(st = stamp()) {
 /** One click: Excel + database + document manifest + settings + verification. */
 export async function emergencyBackup(createdBy: string) {
   const st = stamp();
-  const excel = await createExcelBackup("EMERGENCY", createdBy, { withDatabase: true });
+  const excel = await createExcelBackup("EMERGENCY", createdBy, { withDatabase: true, waitForDrive: true });
   const docs = await backupDocuments(st);
   const settingsFile = await backupSettingsFile(st);
-  return { excel, documents: docs, settingsFile, location: BACKUP_DIRS.root };
+  let drive: { ok: boolean; error?: string } | null = null;
+  if (excel.drive === "PENDING") {
+    const r = await uploadBackup(excel.id);
+    drive = r.ok ? { ok: true } : { ok: false, error: r.error };
+  }
+  return { excel, documents: docs, settingsFile, location: BACKUP_DIRS.root, drive };
 }
 
 /** EXPORT ALL ERP DATA: one ZIP with /Excel, /Database, /Documents, /Manifest, /Logs. */
-export async function exportAll(createdBy: string): Promise<{ zipPath: string; fileName: string }> {
+export async function exportAll(createdBy: string): Promise<{ zipPath: string; fileName: string; drive: string }> {
   ensureDirs();
   const st = stamp();
   const work = fs.mkdtempSync(path.join(BACKUP_DIRS.archive, ".export-"));
@@ -171,8 +184,10 @@ export async function exportAll(createdBy: string): Promise<{ zipPath: string; f
       zip.append(`${new Date().toISOString()} export by ${createdBy}\nrecords=${excel.totalRecords} checksum=${excel.checksum}\n`, { name: "Logs/export.log" });
       zip.finalize();
     });
-    await prisma.backupRecord.update({ where: { id: excel.id }, data: { fileName: zipName, filePath: zipPath } });
-    return { zipPath, fileName: zipName };
+    const upload = await autoUploadEnabled().catch(() => false);
+    await prisma.backupRecord.update({ where: { id: excel.id }, data: { fileName: zipName, filePath: zipPath, driveStatus: upload ? "PENDING" : "NONE" } });
+    if (upload) queueUpload(excel.id);
+    return { zipPath, fileName: zipName, drive: upload ? "PENDING" : "NONE" };
   } finally {
     fs.rmSync(work, { recursive: true, force: true });
   }

@@ -15,6 +15,7 @@ import { ExpenseDetailPage, ExpenseFormPage, ExpensesPage } from "./pages/Expens
 import { AlertsPage, DocumentsPage, ProfitPage, ReportsPage, TargetsPage } from "./pages/Analysis";
 import { BackupPage } from "./pages/Backup";
 import { SettingsPage } from "./pages/Settings";
+import { ImportExportPage } from "./pages/ImportExport";
 
 function Protected() {
   const { me } = useAuth();
@@ -56,6 +57,7 @@ function App() {
           <Route path="/documents" element={<DocumentsPage />} />
           <Route path="/backup" element={<BackupPage />} />
           <Route path="/alerts" element={<AlertsPage />} />
+          <Route path="/import-export" element={<ImportExportPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>

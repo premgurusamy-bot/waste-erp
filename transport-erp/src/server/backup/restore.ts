@@ -196,8 +196,9 @@ export async function analyze(parsed: ParsedBackup, mode: RestoreMode, opts: { s
       }
       if (key === "settings" && rid && LOCAL_SETTING(rid)) continue; // never import machine-specific settings
 
+      const badCells = new Set(row.issues.map((x) => x.column));
       for (const c of def.columns) {
-        if (c.derived || c.key === def.idKey) continue;
+        if (c.derived || c.key === def.idKey || badCells.has(c.header)) continue;
         const v = o[c.key];
         const f = fields.get(c.key);
         const codeAuto = isTemplate && CODE_PREFIX[key]?.[0] === c.key;
@@ -338,6 +339,11 @@ export async function execute(a: Analysis, opts: { dryRun?: boolean; userName: s
       }
     }
     await syncSequences(tx);
+    // trips that arrive through MERGE / IMPORT get their transporter settlement, like trips entered on screen
+    if (mode !== "FULL") {
+      const open = await tx.trip.findMany({ where: { transporterId: { not: null }, status: { not: "CANCELLED" }, settlement: null }, select: { id: true, transporterId: true } });
+      for (const t of open) await tx.transporterSettlement.create({ data: { code: await nextCode(tx, "STL"), tripId: t.id, transporterId: t.transporterId!, status: "PENDING" } });
+    }
 
     // ---- verify record counts
     const counts: ExecuteResult["counts"] = [];

@@ -16,6 +16,7 @@ export const DEFAULT_SETTINGS: Record<string, string> = {
   "invoice.terms": "Payment due within the credit period. Subject to local jurisdiction.",
   "alerts.expiryDays": "60",
   "target.metric": "PROFIT",
+  "gdrive.autoUpload": "true",
 };
 
 const EDITABLE = new Set(Object.keys(DEFAULT_SETTINGS));

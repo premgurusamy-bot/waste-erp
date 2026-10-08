@@ -31,9 +31,12 @@ function parseNumber(v: any): number {
     if (!Number.isFinite(v)) throw new CellError("is not a valid number");
     return v;
   }
-  const t = String(v).replace(/[₹,\s]/g, "");
+  let t = String(v).trim().replace(/^(rs\.?|inr|₹)\s*/i, "").replace(/\s*(\/-|rs\.?|inr)$/i, "").replace(/[₹,\s]/g, "");
+  let neg = false;
+  if (/^\(.*\)$/.test(t)) { neg = true; t = t.slice(1, -1); } // accounting style (1,000)
+  if (/^\.\d/.test(t)) t = `0${t}`;
   if (!/^-?\d+(\.\d+)?$/.test(t)) throw new CellError(`"${v}" is not a valid number`);
-  return Number(t);
+  return neg ? -Number(t) : Number(t);
 }
 
 function parseDate(v: any): string {
@@ -43,10 +46,15 @@ function parseDate(v: any): string {
   }
   if (typeof v === "number") return isoDate(new Date(EXCEL_EPOCH + Math.round(v) * DAY));
   const t = String(v).trim();
+  const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+  const year = (s: string) => (s.length === 2 ? 2000 + Number(s) : Number(s));
   let y: number, mo: number, da: number;
-  let mm = t.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  let mm = t.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
   if (mm) [y, mo, da] = [Number(mm[1]), Number(mm[2]), Number(mm[3])];
-  else if ((mm = t.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/))) [da, mo, y] = [Number(mm[1]), Number(mm[2]), Number(mm[3])];
+  else if ((mm = t.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4}|\d{2})(?:\s.*)?$/))) [da, mo, y] = [Number(mm[1]), Number(mm[2]), year(mm[3])];
+  else if ((mm = t.match(/^(\d{1,2})[-/.\s]+([A-Za-z]{3,9})[-/.,\s]+(\d{4}|\d{2})$/)) && MONTHS.includes(mm[2].slice(0, 3).toLowerCase())) [da, mo, y] = [Number(mm[1]), MONTHS.indexOf(mm[2].slice(0, 3).toLowerCase()) + 1, year(mm[3])];
+  else if ((mm = t.match(/^([A-Za-z]{3,9})[-/.\s]+(\d{1,2}),?[-/.\s]+(\d{4})$/)) && MONTHS.includes(mm[1].slice(0, 3).toLowerCase())) [da, mo, y] = [Number(mm[2]), MONTHS.indexOf(mm[1].slice(0, 3).toLowerCase()) + 1, Number(mm[3])];
+  else if (/^\d{5}$/.test(t)) return isoDate(new Date(EXCEL_EPOCH + Number(t) * DAY));
   else throw new CellError(`"${t}" is not a valid date (use DD-MM-YYYY)`);
   const dt = new Date(Date.UTC(y, mo - 1, da));
   if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== mo - 1 || dt.getUTCDate() !== da) throw new CellError(`"${t}" is not a real calendar date`);

@@ -620,6 +620,12 @@ model BackupRecord {
   message     String?
   createdBy   String?
   createdAt   DateTime  @default(now())
+  /// Google Drive copy: NONE / PENDING / UPLOADED / FAILED
+  driveStatus     String    @default("NONE")
+  driveFileId     String?
+  driveDbFileId   String?
+  driveUploadedAt DateTime?
+  driveError      String?
 
   @@index([createdAt])
   @@map("backup_records")

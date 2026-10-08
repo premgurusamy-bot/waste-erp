@@ -44,6 +44,8 @@ Documents/G Road Lines ERP/Backup/Archive/     monthly copies (GRL_ERP_MONTHLY_Y
 Documents/G Road Lines ERP/Files/              uploaded documents (LR, POD, receipts…)
 ```
 
+| 4 | **Google Drive copy** – every verified backup (Excel + database file), every full export and all document photos are uploaded to *My Drive › G Road Lines ERP Backup* in your own Gmail / Google account | Automatically after every backup (retried hourly when offline); **Upload now** any time |
+
 Every backup is a **new file** (never overwritten), is **read back and verified** immediately after writing,
 and is listed in **Backup History** (AUTOMATIC / MANUAL / PRE-RESTORE / PRE-UPDATE / EMERGENCY, status SUCCESS / FAILED / VERIFIED / CORRUPTED).
 Old backups are **never deleted automatically**: the Retention tab proposes files beyond “keep last 30 daily / 12 monthly”
@@ -73,6 +75,17 @@ Invalid records are never imported silently: the import fails with exact errors,
 it was, from the PRE-RESTORE backup. **RESTORE TEST** performs a complete restore of the latest backup inside a
 transaction and then undoes it – proof that the backup really works, without changing anything.
 
+### Google Drive (your Gmail account)
+One-time setup on **Backup & Restore → Google Drive** (about 5 minutes, steps shown on screen): create a free Google Cloud project with your
+Gmail account, enable the Google Drive API, set up the OAuth consent screen (and **publish** it, otherwise Google disconnects after 7 days),
+create an OAuth client of type *Web application* with redirect URI `http://localhost:4000/api/gdrive/callback`, paste the Client ID and
+secret, click **Connect Google Drive** and sign in. Do this on the office computer itself.
+- The ERP asks only for the `drive.file` permission: it can see and change **only the files it created**, never your other Drive files or e-mail.
+- The Client secret and the sign-in token are stored **encrypted** on the computer and are never written into Excel backups.
+- Folders: `G Road Lines ERP Backup/Excel`, `/Database`, `/Documents` (LR / POD / receipt photos), `/Exports`.
+- **Restore from Google Drive**: *Backups in Google Drive → Restore* downloads the file (and missing document photos) and opens the normal
+  restore wizard (checksum verification, preview, pre-restore backup, rollback). On a new computer: install, connect Google Drive, restore.
+
 See **[DISASTER_RECOVERY.md](DISASTER_RECOVERY.md)** for the step-by-step recovery on a new computer.
 
 ### Excel workbook layout
@@ -84,6 +97,25 @@ Schema Version, record counts, Total Records, Checksum, Created By, per-sheet SH
 Human readable: real dates and amounts, header row, filters, frozen panes, totals rows, names next to IDs.
 Grey columns (names, profit, balances) are calculated for reading and ignored on restore. No Excel formulas are used.
 Every record has a permanent UUID (plus a readable code such as `TRP-000123`); row numbers are never identifiers.
+
+---
+
+## 1a. Import any client data / export in any format
+**Import & Export → Import client data** takes the client's own file – Excel (.xlsx/.xlsm), CSV, TSV, TXT (any delimiter) or JSON,
+exported from Tally, Busy, another ERP or their own register:
+1. Choose the file (title rows above the header are skipped automatically).
+2. Say what the rows are: customers, transporters, vehicles, drivers, loading / delivery points, freight rates, trips, expenses, customer receipts or transporter payments.
+3. **Columns are matched automatically** from the words transporters use (“Party Name”, “Lorry No”, “GC No”, “Lorry Hire”, “Hamali”, “From / To”, “Wt (MT)”…) – change any match.
+4. **Check data**: names are matched to existing records (customer “abc manufacturing” → ABC Manufacturing; “TN 37 AB 1234” → TN37AB1234);
+   missing customers / vehicles / drivers / places / transporters can be created; rows that match an existing record update it **without
+   blanking fields the file does not have**; amounts like “Rs. 1,25,000/-” and dates like 08-Oct-2026, 08/10/26 are cleaned.
+5. Errors are listed with the **row numbers of the client's file**. Import runs through the same safe engine as restore: safety backup first,
+   one transaction, verification, rollback. Trips get their transporter settlements automatically.
+
+Old .xls / .ods: “Save As .xlsx” first. PDFs and photos cannot be read as data.
+
+**Import & Export → Export data**: any table (or ALL DATA) as **Excel, CSV, TSV, JSON, XML, PDF or HTML**, with a date range for trips,
+expenses, invoices and payments; with Google Drive connected also **Open in Google Sheets** and **Save to Google Drive**.
 
 ---
 
@@ -151,7 +183,7 @@ cookie, account lock after 5 wrong passwords, login rate limiting, permission ch
 Prisma parameterised SQL, React output escaping + Content-Security-Policy (XSS), CSRF protection (custom header + same origin),
 upload type check by file content, `nosniff`, security headers, HTTPS-ready (`COOKIE_SECURE=true` behind a TLS reverse proxy).
 Audit log: login, logout, create, edit, status, cancel, payment, invoice, settlement, backup, verify, restore, import, export, licence and
-password changes – user, date / time, action, record ID / code, old and new values.
+password changes, Google Drive connect / disconnect – user, date / time, action, record ID / code, old and new values.
 
 Licence (TRIAL 30 days / MONTHLY / YEARLY / PERPETUAL) – Ed25519-signed keys, see **[LICENSING.md](LICENSING.md)**.
 Warnings at 30, 15 and 7 days. **Expired: no data is deleted**; the ERP is read-only while backup, export, restore, licence renewal and
@@ -175,7 +207,7 @@ Sample data: 20 customers, 10 transporters, 20 vehicles, 30 drivers, 6 loading /
 (first trip: ABC Manufacturing, Coimbatore → Tiruppur, freight ₹30,000, hire ₹22,000, expenses ₹3,000, profit ₹5,000),
 200 expenses, 50 invoices with receipts, transporter settlements and payments, targets.
 
-**Tests (48)** – including the mandatory one: *create data → export Excel → drop the whole database → recreate it → restore from Excel →
+**Tests (63)** – including the mandatory one: *create data → export Excel → drop the whole database → recreate it → restore from Excel →
 compare record counts, every ID, every stored value and all financial totals* (`tests/backup-restore.test.ts`). Also: checksum tampering,
 missing relationships, duplicate IDs, merge never deletes, import-only with a hand-made file, invalid rows, restore test (dry run),
 pre-restore backup + rollback, emergency backup, export ZIP, retention, the registry covers every database column, profit, target meter,

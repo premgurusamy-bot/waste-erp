@@ -35,6 +35,12 @@ import { reportCsv, reportPdf, reportXlsx } from "./lib/export.js";
 import { invoicePdf } from "./lib/invoice-pdf.js";
 import { SHEETS, type SheetKey } from "./backup/sheets.js";
 import { writeImportTemplate } from "./backup/template.js";
+import * as gdrive from "./gdrive/drive.js";
+import * as gsync from "./gdrive/sync.js";
+import { readAnyFile, IMPORT_EXTENSIONS } from "./import/parse.js";
+import { importFields, suggestMapping, IMPORT_TARGETS } from "./import/targets.js";
+import { prepareImport } from "./import/convert.js";
+import { exportData, datasets, EXPORT_FORMATS, type ExportFormat } from "./export/data-export.js";
 
 const upload = multer({ dest: os.tmpdir(), limits: { fileSize: config.maxUploadMb * 1024 * 1024, files: 1 } });
 const restoreUpload = multer({ dest: os.tmpdir(), limits: { fileSize: 500 * 1024 * 1024, files: 1 } });
@@ -103,13 +109,28 @@ export function createApp() {
     res.json({ ok: true });
   });
 
+  // Google redirects the system browser here after sign-in. It may not carry the ERP session (the Windows app opens
+  // Google in the normal browser), so it is authorised by the single-use random `state` created by a signed-in admin.
+  api.get("/gdrive/callback", async (req, res) => {
+    const page = (ok: boolean, text: string) => res.type("html").send(`<!doctype html><meta charset="utf-8"><title>GRL ERP - Google Drive</title><body style="font-family:Segoe UI,Arial;padding:40px;text-align:center"><h2 style="color:${ok ? "#1e8e4e" : "#c0392b"}">${ok ? "Google Drive connected" : "Google Drive not connected"}</h2><p>${text.replace(/[<>&]/g, "")}</p><p>You can close this tab and return to the ERP.</p></body>`);
+    if (req.query.error) return page(false, `Google said: ${String(req.query.error)}`);
+    try {
+      const st = await gdrive.handleCallback(String(req.query.code ?? ""), String(req.query.state ?? ""));
+      await audit(prisma, null, "GOOGLE DRIVE CONNECT", { type: "BACKUP", code: st.email ?? "" });
+      gsync.syncAll().catch(() => {});
+      page(true, `Backups will be copied to ${st.email}'s Google Drive, folder "${gdrive.ROOT_FOLDER}".`);
+    } catch (e) {
+      page(false, (e as Error).message);
+    }
+  });
+
   // ------------------------------------------------ everything below needs a session
   api.use(requireAuth);
 
   // Licence gate: when expired the ERP is read-only, but backup, export, restore, licence and sign-out keep working.
   api.use(async (req, _res, next) => {
     if (["GET", "HEAD"].includes(req.method)) return next();
-    if (/^\/(auth|backup|restore|license|alerts)/.test(req.path)) return next();
+    if (/^\/(auth|backup|restore|license|alerts|gdrive|data-export)/.test(req.path)) return next();
     const lic = await currentLicense();
     if (!lic.writable) return next(new AppError(402, `${lic.message}`));
     next();
@@ -289,6 +310,116 @@ export function createApp() {
     }
     res.json({ path: which, opened: local });
   });
+  // ------------------------------------------------ Google Drive
+  const redirectUri = () => `http://localhost:${config.port}/api/gdrive/callback`;
+  api.get("/gdrive/status", requirePerm("backup.create"), async (_req, res) => {
+    const pending = await prisma.backupRecord.count({ where: { driveStatus: { in: ["PENDING", "FAILED"] } } });
+    const last = await prisma.backupRecord.findFirst({ where: { driveStatus: "UPLOADED" }, orderBy: { driveUploadedAt: "desc" } });
+    const s = await settings.getSettings();
+    res.json({ ...(await gdrive.driveStatus()), redirectUri: redirectUri(), autoUpload: s["gdrive.autoUpload"] !== "false", pending, lastUploadAt: last?.driveUploadedAt ?? null, lastUploadFile: last?.fileName ?? null });
+  });
+  api.post("/gdrive/client", requirePerm("backup.restore"), async (req, res) => {
+    try { await gdrive.saveClient(String(req.body?.clientId ?? ""), String(req.body?.clientSecret ?? "")); } catch (e) { throw badRequest((e as Error).message); }
+    await audit(prisma, ctxOf(req), "GOOGLE DRIVE SETUP", { type: "BACKUP" });
+    res.json(await gdrive.driveStatus());
+  });
+  api.post("/gdrive/connect", requirePerm("backup.restore"), async (_req, res) => {
+    try { res.json({ url: await gdrive.authUrl(redirectUri()) }); } catch (e) { throw badRequest((e as Error).message); }
+  });
+  api.post("/gdrive/disconnect", requirePerm("backup.restore"), async (req, res) => {
+    await gdrive.disconnect();
+    await audit(prisma, ctxOf(req), "GOOGLE DRIVE DISCONNECT", { type: "BACKUP" });
+    res.json(await gdrive.driveStatus());
+  });
+  api.post("/gdrive/sync", requirePerm("backup.create"), async (_req, res) => {
+    try { res.json(await gsync.syncAll()); } catch (e) { throw badRequest((e as Error).message); }
+  });
+  api.post("/gdrive/upload/:id", requirePerm("backup.create"), async (req, res) => {
+    const r = await gsync.uploadBackup(String(req.params.id)).catch((e) => ({ ok: false, error: (e as Error).message }));
+    if (!r.ok) throw badRequest((r as any).error);
+    res.json(r);
+  });
+  api.get("/gdrive/files", requirePerm("backup.create"), async (_req, res) => {
+    try { res.json(await gsync.driveBackups()); } catch (e) { throw badRequest((e as Error).message); }
+  });
+  api.post("/gdrive/stage", requirePerm("backup.restore"), async (req, res) => {
+    const fileId = String(req.body?.fileId ?? "");
+    if (!/^[A-Za-z0-9_-]{10,200}$/.test(fileId)) throw badRequest("Choose a file.");
+    let d;
+    try { d = await gsync.downloadForRestore(fileId); } catch (e) { throw badRequest((e as Error).message); }
+    res.json({ ...restoreSvc.stageUpload(d.tmpPath, d.fileName), documents: d.documents });
+  });
+
+  // ------------------------------------------------ import any client file
+  api.get("/data-import/targets", requirePerm("backup.restore"), (_req, res) => res.json({ targets: IMPORT_TARGETS, extensions: IMPORT_EXTENSIONS }));
+  api.post("/data-import/upload", requirePerm("backup.restore"), restoreUpload.single("file"), async (req, res) => {
+    if (!req.file) throw badRequest("Choose a file.");
+    let tables;
+    try { tables = await readAnyFile(req.file.path, req.file.originalname); } catch (e) { fs.rmSync(req.file.path, { force: true }); throw badRequest((e as Error).message); }
+    const staged = restoreSvc.stageUpload(req.file.path, req.file.originalname);
+    res.json({ ...staged, tables: tables.map((t, i) => ({ index: i, name: t.name, headerRow: t.headerRow, headers: t.headers, rowCount: t.rows.length, sample: t.rows.slice(0, 8).map((r) => r.values.map((v) => (v instanceof Date ? v.toISOString().slice(0, 10) : v))) })) });
+  });
+  const stagedImport = (req: Request) => {
+    const s = restoreSvc.stagedPath(String(req.body?.token ?? ""));
+    if (!s) throw badRequest("Upload the file again.");
+    const target = String(req.body?.target ?? "") as SheetKey;
+    if (!IMPORT_TARGETS.some((t) => t.key === target)) throw badRequest("Choose what the file contains.");
+    return { ...s, target, tableIndex: Number(req.body?.table ?? 0) };
+  };
+  api.post("/data-import/suggest", requirePerm("backup.restore"), async (req, res) => {
+    const s = stagedImport(req);
+    const tables = await readAnyFile(s.filePath, s.fileName);
+    const t = tables[s.tableIndex];
+    if (!t) throw badRequest("Sheet not found.");
+    res.json({ fields: importFields(s.target), mapping: suggestMapping(s.target, t.headers) });
+  });
+  api.post("/data-import/prepare", requirePerm("backup.restore"), async (req, res) => {
+    const s = stagedImport(req);
+    try {
+      res.json(await prepareImport({ ...s, mapping: req.body?.mapping ?? {}, createMissing: req.body?.createMissing !== false, existing: req.body?.existing === "skip" ? "skip" : "update", defaults: req.body?.defaults }));
+    } catch (e) { throw badRequest((e as Error).message); }
+  });
+
+  // ------------------------------------------------ export in many formats
+  api.get("/data-export/datasets", requirePerm("backup.create"), (_req, res) => res.json({ datasets: datasets(), formats: EXPORT_FORMATS }));
+  const exportArgs = (req: Request) => {
+    const key = String(req.params.key) as SheetKey | "all";
+    if (key !== "all" && !SHEETS.some((s) => s.key === key)) throw badRequest("Unknown data set.");
+    const d = (v: any) => (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : undefined);
+    const src = { ...req.query, ...(req.body ?? {}) } as any;
+    return { key, from: d(src.from), to: d(src.to) };
+  };
+  api.get("/data-export/:key", requirePerm("backup.create"), async (req, res) => {
+    const a = exportArgs(req);
+    const format = String(req.query.format ?? "xlsx") as ExportFormat;
+    if (!EXPORT_FORMATS.includes(format)) throw badRequest("Unknown format.");
+    let out;
+    try { out = await exportData(a.key, format, { from: a.from, to: a.to, company: (await admin.getCompany())?.name }); } catch (e) { throw badRequest((e as Error).message); }
+    await audit(prisma, ctxOf(req), "EXPORT", { type: "DATA", code: out.fileName });
+    res.setHeader("Content-Type", out.mime);
+    res.setHeader("Content-Disposition", `attachment; filename="${out.fileName}"`);
+    res.send(out.body);
+  });
+  api.post("/data-export/:key/drive", requirePerm("backup.create"), async (req, res) => {
+    const a = exportArgs(req);
+    const format = String(req.body?.format ?? "gsheet");
+    const asSheet = format === "gsheet";
+    const fmt = (asSheet ? "xlsx" : format) as ExportFormat;
+    if (!EXPORT_FORMATS.includes(fmt)) throw badRequest("Unknown format.");
+    const out = await exportData(a.key, fmt, { from: a.from, to: a.to, company: (await admin.getCompany())?.name });
+    const tmp = path.join(os.tmpdir(), `grl-export-${Date.now()}-${out.fileName}`);
+    fs.writeFileSync(tmp, out.body);
+    try {
+      const f = await gdrive.uploadFile(tmp, { folder: "Exports", name: asSheet ? out.fileName.replace(/\.xlsx$/, "") : out.fileName, convertTo: asSheet ? "application/vnd.google-apps.spreadsheet" : undefined, appProperties: { export: a.key } });
+      await audit(prisma, ctxOf(req), "EXPORT", { type: "DATA", code: `${out.fileName} -> Google Drive` });
+      res.json({ name: f.name, link: f.webViewLink ?? `https://drive.google.com/file/d/${f.id}/view` });
+    } catch (e) {
+      throw badRequest((e as Error).message);
+    } finally {
+      fs.rmSync(tmp, { force: true });
+    }
+  });
+
   api.get("/settings", requirePerm("settings.edit"), async (_req, res) => res.json(await settings.getSettings()));
   api.put("/settings", async (req, res) => res.json(await settings.updateSettings(ctxOf(req), req.body ?? {})));
 

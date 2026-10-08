@@ -7,6 +7,7 @@ import { APP_VERSION } from "../shared/calc.js";
 import { applyMigrations, findMigrationsDir } from "./migrate.js";
 import { databaseBackup } from "./backup/database-backup.js";
 import { stamp } from "./lib/util.js";
+import { syncAll } from "./gdrive/sync.js";
 
 /**
  * Bring the database up to date. When the application version changed (an update was installed),
@@ -52,6 +53,7 @@ export async function startServer(port = config.port, host = config.host) {
     } catch (e) {
       console.error("[backup] automatic backup failed:", (e as Error).message);
     }
+    try { const g = await syncAll(); if (g.connected && (g.uploaded || g.failed)) console.log(`[gdrive] uploaded ${g.uploaded}, failed ${g.failed}`); } catch (e) { console.error("[gdrive]", (e as Error).message); }
     try { await refreshNotifications(); } catch (e) { console.error("[alerts]", (e as Error).message); }
   };
   setTimeout(tick, 15_000).unref();

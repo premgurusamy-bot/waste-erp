@@ -19,6 +19,7 @@ const NAV: { to: string; label: string; ico: string; perm?: string }[] = [
   { to: "/reports", label: "Reports", ico: "▤", perm: "reports.view" },
   { to: "/documents", label: "Documents", ico: "❏", perm: "documents.view" },
   { to: "/backup", label: "Backup & Restore", ico: "⛁", perm: "backup.create" },
+  { to: "/import-export", label: "Import & Export", ico: "⇅", perm: "backup.create" },
   { to: "/alerts", label: "Alerts", ico: "⚠" },
   { to: "/settings", label: "Settings", ico: "⚙" },
 ];

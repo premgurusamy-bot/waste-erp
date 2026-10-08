@@ -81,7 +81,7 @@ const STATUS_COLOR: Record<string, string> = {
   BILLED: "blue", SETTLED: "green", CLOSED: "", CANCELLED: "red", PAID: "green", UNPAID: "red", PARTIAL: "amber", PENDING: "amber", ISSUED: "blue",
   VERIFIED: "green", SUCCESS: "green", FAILED: "red", CORRUPTED: "red", RUNNING: "amber", BLOCKED: "red", EXPIRED: "red", "7 DAYS": "red", "15 DAYS": "amber",
   "30 DAYS": "amber", "60 DAYS": "blue", CRITICAL: "red", URGENT: "red", WARNING: "amber", INFO: "blue", OK: "green", "ON TRACK": "green", "AT RISK": "amber",
-  "BEHIND TARGET": "red", "TARGET ACHIEVED": "green", AUTOMATIC: "blue", MANUAL: "", "PRE-RESTORE": "amber", "PRE-UPDATE": "amber", EMERGENCY: "red", EXPORT: "",
+  "BEHIND TARGET": "red", "TARGET ACHIEVED": "green", UPLOADED: "green", CONNECTED: "green", "NOT CONNECTED": "amber", AUTOMATIC: "blue", MANUAL: "", "PRE-RESTORE": "amber", "PRE-UPDATE": "amber", EMERGENCY: "red", EXPORT: "",
 };
 export function Badge({ s }: { s?: string | null }) {
   if (!s) return null;
