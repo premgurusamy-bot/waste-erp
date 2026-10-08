@@ -53,4 +53,4 @@ Step "Setup complete. Starting the app..."
 Write-Host "Open http://localhost:3000 and sign in with  admin / Admin@123" -ForegroundColor Cyan
 Write-Host "Keep this window open while you use the app. Close it to stop the app."
 Start-Process "http://localhost:3000"
-cmd /c "npm start"
+cmd /c "npx next start -p 3000"
