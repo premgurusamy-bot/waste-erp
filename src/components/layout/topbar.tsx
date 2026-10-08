@@ -1,13 +1,18 @@
 "use client";
 
 import * as DM from "@radix-ui/react-dropdown-menu";
-import { AlertTriangle, Bell, CircleAlert, Info, KeyRound, LogOut, Search, UserRound } from "lucide-react";
+import { AlertTriangle, Bell, CircleAlert, Info, KeyRound, LogOut, Search, Smartphone, UserRound } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { logout, markReadAction } from "@/app/actions/auth";
 import { cn } from "@/lib/utils";
 import { MenuButton } from "./sidebar";
+
+type AndroidBridge = { openSettings: () => void };
+declare global {
+  interface Window { GreenCycleApp?: AndroidBridge }
+}
 
 type Note = { id: string; title: string; message: string; link: string | null; severity: string; read: boolean };
 
@@ -16,6 +21,9 @@ export function Topbar({ user, notifications }: { user: { name: string; roleName
   const [q, setQ] = useState("");
   const [, start] = useTransition();
   const unread = notifications.filter((n) => !n.read).length;
+  // Inside the Android app, offer its native settings (server address, sign out, uninstall).
+  const [inApp, setInApp] = useState(false);
+  useEffect(() => setInApp(Boolean(window.GreenCycleApp)), []);
   const sevIcon = (s: string) =>
     s === "CRITICAL" ? <CircleAlert className="size-4 text-red-600" /> : s === "WARNING" ? <AlertTriangle className="size-4 text-amber-500" /> : <Info className="size-4 text-navy-500" />;
   return (
@@ -88,6 +96,11 @@ export function Topbar({ user, notifications }: { user: { name: string; roleName
               <DM.Item asChild>
                 <Link href="/profile" className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm outline-none hover:bg-slate-50 focus:bg-slate-50"><KeyRound className="size-4" /> Change password</Link>
               </DM.Item>
+              {inApp && (
+                <DM.Item onSelect={() => window.GreenCycleApp?.openSettings()} className="flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm outline-none hover:bg-slate-50 focus:bg-slate-50">
+                  <Smartphone className="size-4" /> App settings
+                </DM.Item>
+              )}
               <DM.Separator className="my-1 h-px bg-slate-100" />
               <DM.Item asChild>
                 <form action={logout}>

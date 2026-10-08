@@ -1,7 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE, verifySession } from "@/server/auth/session";
 
-const PUBLIC_PATHS = ["/login", "/api/health"];
+// Public: sign-in, health check, and the mobile-app install page with its download and icons.
+const PUBLIC_PATHS = ["/login", "/api/health", "/mobile", "/downloads", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png", "/apple-touch-icon.png"];
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;

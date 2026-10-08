@@ -15,6 +15,7 @@ import { formatDateTime } from "@/lib/utils";
 import { requirePermission } from "@/server/auth/current-user";
 import { getLicenseStatus } from "@/server/license";
 import { emailConfigured } from "@/server/mail";
+import { lanAddresses, qrSvg } from "@/server/mobile";
 
 export const metadata = { title: "Settings" };
 
@@ -26,11 +27,12 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   return (
     <>
       <PageHeader title="Settings" description="Company profile, document numbering and system options" />
-      <LinkTabs base="/settings" active={tab} tabs={[{ key: "company", label: "Company Profile" }, { key: "numbering", label: "Document Numbering" }, { key: "general", label: "General" }, { key: "system", label: "System & Backup" }, { key: "licence", label: "Licence" }]} />
+      <LinkTabs base="/settings" active={tab} tabs={[{ key: "company", label: "Company Profile" }, { key: "numbering", label: "Document Numbering" }, { key: "general", label: "General" }, { key: "system", label: "System & Backup" }, { key: "mobile", label: "Mobile App" }, { key: "licence", label: "Licence" }]} />
       {tab === "company" && <Company manage={manage} />}
       {tab === "numbering" && <Numbering manage={manage} />}
       {tab === "general" && <General manage={manage} />}
       {tab === "system" && <System />}
+      {tab === "mobile" && <Mobile />}
       {tab === "licence" && <Licence manage={manage} />}
     </>
   );
@@ -171,6 +173,41 @@ async function Licence({ manage }: { manage: boolean }) {
         <CardContent className="space-y-3 text-sm text-slate-600">
           <p>Paste the licence key you received from your vendor. A renewal key replaces the current one; your data is not affected.</p>
           {manage ? <LicenseForm action={licenseAction} /> : <p>Only an administrator can install a licence key.</p>}
+        </CardContent>
+      </Section>
+    </div>
+  );
+}
+
+async function Mobile() {
+  const addresses = lanAddresses(process.env.PORT || "3000");
+  const qrs = await Promise.all(addresses.map((a) => qrSvg(`${a}/mobile`)));
+  return (
+    <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+      <Section title="Install on phones">
+        <CardContent className="space-y-3 text-sm text-slate-600">
+          {addresses.length === 0 && <p>This computer is not connected to a network, so phones cannot reach it.</p>}
+          {addresses.map((a, i) => (
+            <div key={a} className="flex flex-wrap items-center gap-4">
+              <div className="size-40 shrink-0 rounded-lg border border-slate-200 p-1" dangerouslySetInnerHTML={{ __html: qrs[i] }} />
+              <div>
+                <p>Scan with the phone camera, or open in the phone browser:</p>
+                <p className="mt-1 font-mono text-base font-semibold text-navy-800">{a}/mobile</p>
+                <p className="mt-2">Server address to type in the app: <b className="font-mono">{a.replace("http://", "")}</b></p>
+              </div>
+            </div>
+          ))}
+        </CardContent>
+      </Section>
+      <Section title="If phones cannot connect">
+        <CardContent className="space-y-2 text-sm text-slate-600">
+          <ol className="list-decimal space-y-1 pl-5">
+            <li>The phone must be on the <b>same Wi-Fi</b> as this computer.</li>
+            <li>On this computer, double-click <b>ALLOW-PHONES.bat</b> once and click <b>Yes</b>. It opens port 3000 in Windows Firewall.</li>
+            <li>Keep this computer on and GreenCycle running (START-WINDOWS.bat) while staff use their phones.</li>
+            <li>If the address above changes after a router restart, ask your network person to give this computer a <b>fixed IP address</b>, then update the address in each app (your name → App settings).</li>
+          </ol>
+          <p className="pt-2">Android: the app supports camera photos, GPS location, downloads and printing. iPhone: use Safari → Share → Add to Home Screen.</p>
         </CardContent>
       </Section>
     </div>
