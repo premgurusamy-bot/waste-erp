@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.env
+.env.test
+*.pem
+licences/
+storage/
+desktop/node_modules/
+desktop/dist/
+mobile/node_modules/
+mobile/android/app/build/
+coverage/
+scratch/
+storage-test/
+storage/
