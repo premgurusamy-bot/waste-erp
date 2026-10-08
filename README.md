@@ -13,6 +13,12 @@ CUSTOMER → SITE → CONTRACT/RATE → PICKUP → SCHEDULE → VEHICLE + DRIVER
 ## Stack
 Next.js 15 (App Router, TypeScript, Server Actions) · Tailwind CSS 4 · Radix UI · PostgreSQL 16 · Prisma 6 · Zod · React Hook Form · Recharts · ExcelJS · PDFKit · jose (JWT sessions) + bcrypt · Vitest · Playwright.
 
+## Easiest start on Windows
+1. Install **Node.js LTS** (nodejs.org) and **PostgreSQL** (postgresql.org); in pgAdmin create a database named `waste_erp`.
+2. On GitHub click **Code → Download ZIP**, then unzip it (right-click → Extract All).
+3. In the unzipped folder double-click **SETUP-WINDOWS.bat** and type your PostgreSQL password when asked.
+4. The app opens at http://localhost:3000 — sign in with `admin` / `Admin@123`. Next time double-click **START-WINDOWS.bat**.
+
 ## Quick start (local)
 ```bash
 npm install
