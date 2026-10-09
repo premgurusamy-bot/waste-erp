@@ -12,9 +12,12 @@ const args = Object.fromEntries(
   process.argv.slice(2).flatMap((a, i, all) => (a.startsWith("--") ? [[a.slice(2), all[i + 1]]] : [])),
 );
 
-const keyFile = [args.key, process.env.GCERP_LICENCE_KEY_FILE, "licence-private.pem", join(homedir(), "licence-private.pem"), join(homedir(), "Documents", "licence-private.pem"), join(homedir(), "Desktop", "licence-private.pem")].find((f) => f && existsSync(f));
+// Accept the file however it was saved: .pem, .txt, or .pem.txt (Windows may add .txt).
+const names = ["licence-private.pem", "licence-private.txt", "licence-private.pem.txt"];
+const folders = [".", homedir(), join(homedir(), "Documents"), join(homedir(), "Desktop"), join(homedir(), "Downloads")];
+const keyFile = [args.key, process.env.GCERP_LICENCE_KEY_FILE, ...folders.flatMap((d) => names.map((n) => join(d, n)))].find((f) => f && existsSync(f));
 if (!keyFile) {
-  console.error("\nPrivate key file 'licence-private.pem' not found.\nPut it in your Documents folder, or pass --key <path>.\n");
+  console.error("\nSecret key file 'licence-private.pem' (or 'licence-private.txt') not found.\nPut it in your Documents, Desktop or Downloads folder, or pass --key <path>.\n");
   process.exit(1);
 }
 
