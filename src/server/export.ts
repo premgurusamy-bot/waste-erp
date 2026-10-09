@@ -2,6 +2,8 @@ import ExcelJS from "exceljs";
 import PDFDocument from "pdfkit";
 import { prisma } from "@/lib/db";
 import { formatDate, formatDateTime, num } from "@/lib/utils";
+import { pdfColours } from "@/lib/appearance";
+import { getAppearance, pdfLogo } from "./branding";
 import type { ColType, ReportColumn, Row } from "./reports";
 
 export type Table = { title: string; subtitle?: string; columns: ReportColumn[]; rows: Row[]; totals?: Row };
@@ -80,8 +82,22 @@ export function toCsv(t: Table): string {
   return "﻿" + lines.join("\n");
 }
 
-const NAVY = "#1b365d";
-const GREEN = "#039855";
+/** Company colours and logo for PDF headers (follow Settings → Appearance). */
+export async function pdfBrand() {
+  const a = await getAppearance();
+  return { ...pdfColours(a), logo: await pdfLogo() };
+}
+
+/** Draws the logo at (x, y) inside a box h tall; returns the horizontal space used (0 without a logo). */
+export function drawLogo(doc: PDFKit.PDFDocument, logo: Buffer | null, x: number, y: number, h = 40): number {
+  if (!logo) return 0;
+  try {
+    doc.image(logo, x, y, { fit: [h * 1.6, h] });
+    return h * 1.6 + 8;
+  } catch {
+    return 0; // unreadable image: print without it
+  }
+}
 
 export function pdfBuffer(build: (doc: PDFKit.PDFDocument) => void, opts: PDFKit.PDFDocumentOptions = {}): Promise<Buffer> {
   return new Promise((resolve, reject) => {
@@ -106,13 +122,15 @@ export function pdfBuffer(build: (doc: PDFKit.PDFDocument) => void, opts: PDFKit
 
 export async function companyHeader(doc: PDFKit.PDFDocument, title: string, subtitle?: string) {
   const c = await prisma.company.findFirst();
+  const { accent, heading, logo } = await pdfBrand();
   const w = doc.page.width - 72;
-  doc.rect(36, 30, w, 3).fill(GREEN);
-  doc.fillColor(NAVY).fontSize(14).font("Helvetica-Bold").text(c?.name ?? "", 36, 42, { width: w * 0.6 });
+  doc.rect(36, 30, w, 3).fill(accent);
+  const off = drawLogo(doc, logo, 36, 40, 36);
+  doc.fillColor(heading).fontSize(14).font("Helvetica-Bold").text(c?.name ?? "", 36 + off, 42, { width: w * 0.6 - off });
   doc.font("Helvetica").fontSize(8).fillColor("#475569")
-    .text([c?.address, c?.city, c?.pincode].filter(Boolean).join(", "), { width: w * 0.6 })
-    .text([c?.gstin ? `GSTIN: ${c.gstin}` : "", c?.phone, c?.email].filter(Boolean).join("  ·  "), { width: w * 0.6 });
-  doc.font("Helvetica-Bold").fontSize(13).fillColor(NAVY).text(title, 36 + w * 0.55, 42, { width: w * 0.45, align: "right" });
+    .text([c?.address, c?.city, c?.pincode].filter(Boolean).join(", "), { width: w * 0.6 - off })
+    .text([c?.gstin ? `GSTIN: ${c.gstin}` : "", c?.phone, c?.email].filter(Boolean).join("  ·  "), { width: w * 0.6 - off });
+  doc.font("Helvetica-Bold").fontSize(13).fillColor(heading).text(title, 36 + w * 0.55, 42, { width: w * 0.45, align: "right" });
   if (subtitle) doc.font("Helvetica").fontSize(8).fillColor("#475569").text(subtitle, 36 + w * 0.45, doc.y + 2, { width: w * 0.55, align: "right" });
   doc.moveDown(1);
   doc.y = Math.max(doc.y, 92);
@@ -125,12 +143,14 @@ export async function companyHeader(doc: PDFKit.PDFDocument, title: string, subt
 export async function toPdf(t: Table): Promise<Buffer> {
   const landscape = t.columns.length > 7;
   const company = await prisma.company.findFirst();
+  const { accent: GREEN, heading: NAVY, logo } = await pdfBrand();
   return pdfBuffer(
     (doc) => {
       const w = doc.page.width - 72;
       const header = () => {
         doc.rect(36, 30, w, 3).fill(GREEN);
-        doc.fillColor(NAVY).font("Helvetica-Bold").fontSize(12).text(company?.name ?? "", 36, 40);
+        const off = drawLogo(doc, logo, 36, 37, 24);
+        doc.fillColor(NAVY).font("Helvetica-Bold").fontSize(12).text(company?.name ?? "", 36 + off, 40);
         doc.fontSize(11).text(t.title, 36, 40, { width: w, align: "right" });
         if (t.subtitle) doc.font("Helvetica").fontSize(8).fillColor("#475569").text(t.subtitle, 36, 56, { width: w, align: "right" });
         doc.y = 74;

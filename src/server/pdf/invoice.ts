@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db";
 import { formatDate, num, STATES } from "@/lib/utils";
 import { rupeesInWords } from "@/lib/words";
-import { pdfBuffer } from "../export";
+import { drawLogo, pdfBrand, pdfBuffer } from "../export";
 
 export type InvoiceDoc = {
   title: string;
@@ -26,22 +26,24 @@ export type InvoiceDoc = {
   extra?: [string, string][];
 };
 
-const NAVY = "#1b365d";
-const GREEN = "#039855";
 const money = (v: unknown) => num(v as number).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const qty = (v: unknown) => num(v as number).toLocaleString("en-IN", { maximumFractionDigits: 3 });
 
 export async function renderInvoicePdf(inv: InvoiceDoc): Promise<Buffer> {
   const c = await prisma.company.findFirst();
+  const { accent: GREEN, heading: NAVY, logo } = await pdfBrand();
   return pdfBuffer((doc) => {
     const L = 36;
     const W = doc.page.width - 72;
     doc.rect(L, 30, W, 3).fill(GREEN);
-    doc.fillColor(NAVY).font("Helvetica-Bold").fontSize(15).text(c?.name ?? "", L, 42, { width: W * 0.6 });
+    const off = drawLogo(doc, logo, L, 40, 44);
+    const tw = W * 0.6 - off;
+    doc.fillColor(NAVY).font("Helvetica-Bold").fontSize(15).text(c?.name ?? "", L + off, 42, { width: tw });
     doc.font("Helvetica").fontSize(8).fillColor("#475569");
-    doc.text([c?.address, c?.city, c?.pincode].filter(Boolean).join(", "), { width: W * 0.6 });
-    doc.text(`GSTIN: ${c?.gstin ?? "-"}   PAN: ${c?.pan ?? "-"}   State: ${c?.stateCode} - ${c?.stateName}`, { width: W * 0.6 });
-    doc.text([c?.phone, c?.email].filter(Boolean).join("  ·  "), { width: W * 0.6 });
+    doc.text([c?.address, c?.city, c?.pincode].filter(Boolean).join(", "), { width: tw });
+    doc.text(`GSTIN: ${c?.gstin ?? "-"}   PAN: ${c?.pan ?? "-"}   State: ${c?.stateCode} - ${c?.stateName}`, { width: tw });
+    doc.text([c?.phone, c?.email].filter(Boolean).join("  ·  "), { width: tw });
+    const headerBottom = doc.y; // long names/addresses beside a logo can wrap onto more lines
     doc.font("Helvetica-Bold").fontSize(16).fillColor(NAVY).text(inv.title, L + W * 0.55, 42, { width: W * 0.45, align: "right" });
     doc.font("Helvetica").fontSize(8).fillColor("#64748b").text("Original for Recipient", L + W * 0.55, 62, { width: W * 0.45, align: "right" });
     if (inv.cancelled) {
@@ -49,7 +51,7 @@ export async function renderInvoicePdf(inv: InvoiceDoc): Promise<Buffer> {
     }
 
     // Parties & document details
-    let y = 112;
+    let y = Math.max(112, headerBottom + 12);
     doc.roundedRect(L, y, W, 92, 6).lineWidth(0.6).strokeColor("#cbd5e1").stroke();
     doc.font("Helvetica-Bold").fontSize(7.5).fillColor("#64748b").text(inv.party.label.toUpperCase(), L + 10, y + 8);
     doc.font("Helvetica-Bold").fontSize(10).fillColor("#0f172a").text(inv.party.name, L + 10, y + 20, { width: W * 0.5 });

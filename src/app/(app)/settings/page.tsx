@@ -1,5 +1,7 @@
 import { Pencil } from "lucide-react";
-import { companyAction, licenseAction, sequenceAction, settingAction } from "@/app/actions/settings";
+import { appearanceAction, companyAction, licenseAction, sequenceAction, settingAction } from "@/app/actions/settings";
+import { AppearanceForm } from "@/components/forms/appearance-form";
+import { getAppearance } from "@/server/branding";
 import { FormDialog } from "@/components/forms/confirm-action";
 import { EntityForm } from "@/components/forms/entity-form";
 import { LicenseForm } from "@/components/forms/license-form";
@@ -27,10 +29,11 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   return (
     <>
       <PageHeader title="Settings" description="Company profile, document numbering and system options" />
-      <LinkTabs base="/settings" active={tab} tabs={[{ key: "company", label: "Company Profile" }, { key: "numbering", label: "Document Numbering" }, { key: "general", label: "General" }, { key: "system", label: "System & Backup" }, { key: "mobile", label: "Mobile App" }, { key: "licence", label: "Licence" }]} />
+      <LinkTabs base="/settings" active={tab} tabs={[{ key: "company", label: "Company Profile" }, { key: "numbering", label: "Document Numbering" }, { key: "general", label: "General" }, { key: "appearance", label: "Appearance" }, { key: "system", label: "System & Backup" }, { key: "mobile", label: "Mobile App" }, { key: "licence", label: "Licence" }]} />
       {tab === "company" && <Company manage={manage} />}
       {tab === "numbering" && <Numbering manage={manage} />}
       {tab === "general" && <General manage={manage} />}
+      {tab === "appearance" && <AppearanceTab manage={manage} />}
       {tab === "system" && <System />}
       {tab === "mobile" && <Mobile />}
       {tab === "licence" && <Licence manage={manage} />}
@@ -211,5 +214,15 @@ async function Mobile() {
         </CardContent>
       </Section>
     </div>
+  );
+}
+
+async function AppearanceTab({ manage }: { manage: boolean }) {
+  const a = await getAppearance();
+  return (
+    <Card><CardContent>
+      <p className="mb-5 text-sm text-slate-600">Make GreenCycle look like your company. Changes apply to every user{manage ? "" : ". Only an administrator can change them"}.</p>
+      <AppearanceForm initial={a} disabled={!manage} action={appearanceAction} />
+    </CardContent></Card>
   );
 }

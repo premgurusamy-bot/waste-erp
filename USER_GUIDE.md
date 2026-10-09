@@ -51,3 +51,20 @@ Administrators can grant extra permissions to an individual user (Users & Roles 
 
 ## Corrections — nothing is deleted
 Use **Cancel** (with a reason) on weighments, processing batches, sales, invoices, receipts, payments, purchases and expenses. Cancelling reverses stock and accounting entries. Master records are **deactivated** instead of deleted. Some cancellations are blocked to protect data, e.g. an invoice with payments must have its receipts cancelled first; a processing batch whose output has been sold cannot be cancelled.
+
+## Appearance (logo, colours, layout)
+
+Administrators can make GreenCycle look like their company under **Settings → Appearance**. Changes apply to every user.
+
+| Option | Choices | Where it shows |
+|---|---|---|
+| Company logo | PNG, JPG or WebP, up to 2 MB | Menu, sign-in page, invoices, weighbridge slips, report PDFs |
+| Sign-in page picture | PNG, JPG or WebP, up to 2 MB (a wide photo works best) | Left side of the sign-in page |
+| Theme colour | Green, Blue, Teal, Purple, Orange, Red | Buttons, highlights, charts, PDF accent line |
+| Menu colour | Navy, Charcoal, Forest, Maroon, Indigo | Left menu, headings, PDF headings |
+| Menu style | Full, or Compact (icons only; hover for the name) | Left menu on computers |
+| Page width | Full width, or Centred | All pages |
+| Text size | Small, Normal, Large | All pages |
+
+Colour and size choices are previewed as you click; press **Save appearance** to keep them, or **Reset to default**.
+Uploaded pictures are kept in `storage/uploads/branding`, so include the `storage` folder in backups.

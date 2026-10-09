@@ -4,7 +4,7 @@ import { formatDateTime, formatQty } from "@/lib/utils";
 import { getCtx } from "@/server/auth/current-user";
 import { assertCan } from "@/server/context";
 import { toActionError } from "@/server/errors";
-import { fileResponse, MIME, pdfBuffer } from "@/server/export";
+import { drawLogo, fileResponse, MIME, pdfBrand, pdfBuffer } from "@/server/export";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -22,12 +22,14 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
 async function slipPdf(w: any) {
   const company = await prisma.company.findFirst();
+  const { accent, heading, logo } = await pdfBrand();
   return pdfBuffer((doc) => {
     const W = doc.page.width - 72;
-    doc.rect(36, 30, W, 3).fill("#039855");
-    doc.fillColor("#1b365d").font("Helvetica-Bold").fontSize(14).text(company?.name ?? "", 36, 42);
-    doc.font("Helvetica").fontSize(8).fillColor("#475569").text([company?.address, company?.city].filter(Boolean).join(", "));
-    doc.font("Helvetica-Bold").fontSize(13).fillColor("#1b365d").text("WEIGHBRIDGE SLIP", 36, 42, { width: W, align: "right" });
+    doc.rect(36, 30, W, 3).fill(accent);
+    const off = drawLogo(doc, logo, 36, 40, 36);
+    doc.fillColor(heading).font("Helvetica-Bold").fontSize(14).text(company?.name ?? "", 36 + off, 42, { width: W * 0.6 - off });
+    doc.font("Helvetica").fontSize(8).fillColor("#475569").text([company?.address, company?.city].filter(Boolean).join(", "), { width: W * 0.6 - off });
+    doc.font("Helvetica-Bold").fontSize(13).fillColor(heading).text("WEIGHBRIDGE SLIP", 36, 42, { width: W, align: "right" });
     doc.font("Helvetica").fontSize(9).fillColor("#475569").text(`${w.number}${w.slipNumber ? `  ·  Slip ${w.slipNumber}` : ""}`, 36, 60, { width: W, align: "right" });
     doc.y = 96;
     const row = (k: string, v: string) => {
@@ -48,9 +50,9 @@ async function slipPdf(w: any) {
     const boxY = doc.y;
     const bw = W / 3;
     const box = (i: number, label: string, val: string, hl = false) => {
-      doc.rect(36 + i * bw, boxY, bw - 6, 60).lineWidth(hl ? 2 : 0.8).strokeColor(hl ? "#039855" : "#cbd5e1").stroke();
+      doc.rect(36 + i * bw, boxY, bw - 6, 60).lineWidth(hl ? 2 : 0.8).strokeColor(hl ? accent : "#cbd5e1").stroke();
       doc.font("Helvetica").fontSize(8).fillColor("#64748b").text(label, 44 + i * bw, boxY + 10, { width: bw - 22 });
-      doc.font("Helvetica-Bold").fontSize(18).fillColor(hl ? "#027a48" : "#1b365d").text(val, 44 + i * bw, boxY + 26, { width: bw - 22 });
+      doc.font("Helvetica-Bold").fontSize(18).fillColor(hl ? accent : heading).text(val, 44 + i * bw, boxY + 26, { width: bw - 22 });
     };
     box(0, "GROSS WEIGHT (KG)", formatQty(w.grossWeight));
     box(1, "TARE WEIGHT (KG)", w.tareWeight ? formatQty(w.tareWeight) : "-");

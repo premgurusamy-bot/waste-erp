@@ -1,8 +1,19 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
-const BRAND = "#039855";
+const BRAND_DEFAULT = "#039855";
+
+/** The company's theme colour (Settings → Appearance), read from the page's CSS variables. */
+function useBrand() {
+  const [c, setC] = useState(BRAND_DEFAULT);
+  useEffect(() => {
+    const v = getComputedStyle(document.documentElement).getPropertyValue("--color-brand-600").trim();
+    if (v) setC(v);
+  }, []);
+  return c;
+}
 const S1 = "#2a78d6";
 const S2 = "#eb6834";
 const GRID = "#e2e8f0";
@@ -21,6 +32,7 @@ function Empty() {
 }
 
 export function TrendChart({ data }: { data: { date: string; kg: number }[] }) {
+  const BRAND = useBrand();
   if (!data.some((d) => d.kg > 0)) return <Empty />;
   const label = (d: string) => (d.length === 7 ? d : `${d.slice(8, 10)}/${d.slice(5, 7)}`);
   return (
@@ -44,6 +56,7 @@ export function TrendChart({ data }: { data: { date: string; kg: number }[] }) {
 
 /** Horizontal bars for category magnitude (single hue: identity is carried by the axis label). */
 export function HBarChart({ data, valueKey = "kg", money }: { data: { name: string; [k: string]: string | number }[]; valueKey?: string; money?: boolean }) {
+  const BRAND = useBrand();
   if (!data.length) return <Empty />;
   return (
     <ResponsiveContainer width="100%" height="100%">
@@ -76,6 +89,7 @@ export function RevenueCostChart({ data }: { data: { month: string; revenue: num
 }
 
 export function VBarChart({ data, valueKey = "kg" }: { data: { name: string; [k: string]: string | number }[]; valueKey?: string }) {
+  const BRAND = useBrand();
   if (!data.length) return <Empty />;
   return (
     <ResponsiveContainer width="100%" height="100%">
