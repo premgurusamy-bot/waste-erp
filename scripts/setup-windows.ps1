@@ -47,10 +47,6 @@ Step "Creating tables in the waste_erp database"
 cmd /c "npx prisma migrate deploy"
 if ($LASTEXITCODE -ne 0) { Remove-Item ".env" -ErrorAction SilentlyContinue; Fail "Could not connect to the database. Check that the database waste_erp exists in pgAdmin and that the password is right, then double-click SETUP-WINDOWS.bat again (it will ask for the password again)." }
 Run "Loading company settings and demo data" "npm run db:seed"
-Run "Building the app (takes a few minutes)" "npm run build"
-
-Step "Setup complete. Starting the app..."
-Write-Host "Open http://localhost:3000 and sign in with  admin / Admin@123" -ForegroundColor Cyan
-Write-Host "Keep this window open while you use the app. Close it to stop the app."
-Start-Process "http://localhost:3000"
-cmd /c "npx next start -p 3000"
+Step "Setup complete. Building and starting the app (takes a few minutes the first time)..."
+Write-Host "Sign in with  admin / Admin@123" -ForegroundColor Cyan
+& (Join-Path $PSScriptRoot "start-windows.ps1")

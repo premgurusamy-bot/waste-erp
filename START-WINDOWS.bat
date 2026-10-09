@@ -1,7 +1,5 @@
 @echo off
-rem Double-click this file to start the Waste ERP (after SETUP-WINDOWS.bat has been run once).
+rem Double-click to start GreenCycle ERP (after SETUP-WINDOWS.bat has been run once).
 cd /d "%~dp0"
-echo Starting GreenCycle Waste ERP... keep this window open. Open http://localhost:3000
-start "" http://localhost:3000
-npx next start -p 3000
+powershell -NoProfile -ExecutionPolicy Bypass -File "scripts\start-windows.ps1"
 pause
