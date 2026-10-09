@@ -70,7 +70,7 @@ export function Sidebar({ nav, company, logo, compact }: { nav: NavGroup[]; comp
             </div>
           ))}
         </nav>
-        <p className={cn("border-t border-white/10 px-4 py-3 text-[10px] text-navy-400", compact && "lg:px-1 lg:text-center")}>{compact ? "v1.3" : "v1.3 · Non-hazardous waste"}</p>
+        <p className={cn("border-t border-white/10 px-4 py-3 text-[10px] text-navy-400", compact && "lg:px-1 lg:text-center")}>{compact ? "v1.4" : "v1.4 · Non-hazardous waste"}</p>
       </aside>
     </>
   );

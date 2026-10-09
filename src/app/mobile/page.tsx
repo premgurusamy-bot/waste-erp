@@ -11,7 +11,8 @@ export default async function MobilePage() {
   const iphone = /iPhone|iPad|iPod/i.test(ua);
   const port = host.split(":")[1] ?? "3000";
   // On the office computer itself "localhost" is no use to a phone; show the network address instead.
-  const address = /^(localhost|127\.)/.test(host) ? (lanAddresses(port)[0] ?? `http://${host}`) : `http://${host}`;
+  const proto = h.get("x-forwarded-proto") ?? "http";
+  const address = /^(localhost|127\.)/.test(host) ? (lanAddresses(port)[0] ?? `http://${host}`) : `${proto}://${host}`;
   const shown = address.replace(/^http:\/\//, "");
 
   const android = (
@@ -51,7 +52,7 @@ export default async function MobilePage() {
             <span className="text-lg font-semibold">GreenCycle ERP</span>
           </div>
           <h1 className="mt-6 text-2xl font-semibold">Install the mobile app</h1>
-          <p className="mt-1 text-navy-200">For drivers, weighbridge and field staff. The phone must be on the office Wi-Fi.</p>
+          <p className="mt-1 text-navy-200">For drivers, weighbridge and field staff.{address.startsWith("https://") ? " Works anywhere with internet." : " The phone must be on the office Wi-Fi."}</p>
           <p className="mt-4 inline-block rounded-lg bg-white/10 px-3 py-1.5 text-sm">
             Server address: <b className="font-mono text-brand-300">{shown}</b>
           </p>

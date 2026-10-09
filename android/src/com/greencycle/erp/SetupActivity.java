@@ -67,12 +67,12 @@ public class SetupActivity extends Activity {
         LinearLayout card = card();
         card.addView(text("Server address", 14, "#0f172a", true));
         address = new EditText(this);
-        address.setHint("e.g. 192.168.1.20:3000");
+        address.setHint("e.g. erp.yourcompany.in or 192.168.1.20:3000");
         address.setSingleLine(true);
         address.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
         address.setImeOptions(EditorInfo.IME_ACTION_GO);
         String current = prefs.getString(MainActivity.KEY_SERVER, null);
-        if (current != null) address.setText(current.replaceFirst("^http://", ""));
+        if (current != null) address.setText(current.replaceFirst("^https?://", ""));
         card.addView(address);
         card.addView(text("Ask your administrator. It is shown in GreenCycle on the office computer under Settings → Mobile App.", 13, "#64748b", false));
         status = text("", 14, "#b42318", false);
@@ -115,7 +115,7 @@ public class SetupActivity extends Activity {
                 public void onClick(View v) { confirmUninstall(); }
             });
             more.addView(uninstall);
-            TextView ver = text("GreenCycle ERP for Android · version 1.0", 12, "#94a3b8", false);
+            TextView ver = text("GreenCycle ERP for Android · version 1.1", 12, "#94a3b8", false);
             ver.setGravity(Gravity.CENTER);
             ver.setPadding(0, dp(14), 0, 0);
             more.addView(ver);
@@ -137,7 +137,12 @@ public class SetupActivity extends Activity {
         String s = raw.trim().replaceAll("\\s+", "");
         while (s.endsWith("/")) s = s.substring(0, s.length() - 1);
         if (s.isEmpty()) return "";
-        if (!s.matches("(?i)^https?://.*")) s = "http://" + s;
+        if (!s.matches("(?i)^https?://.*")) {
+            // Office addresses (192.168.x.x, localhost) are plain http on port 3000; internet names use https.
+            String h = s.split("[:/]")[0];
+            boolean local = h.matches("^[0-9.]+$") || h.equalsIgnoreCase("localhost") || !h.contains(".");
+            s = (local ? "http://" : "https://") + s;
+        }
         String host = s.replaceFirst("(?i)^https?://", "");
         if (s.toLowerCase().startsWith("http://") && !host.contains(":") && !host.contains("/")) s = s + ":3000";
         return s;
@@ -162,7 +167,7 @@ public class SetupActivity extends Activity {
                     if (!body.contains("\"database\"")) error = "That address answered, but it is not a GreenCycle server.";
                     else if (!body.contains("\"ok\"")) error = "The server is running but its database is not. Check the office computer.";
                 } catch (Exception e) {
-                    error = "Cannot reach " + url + ". Check that this phone is on the office Wi-Fi and the office computer is running GreenCycle.";
+                    error = "Cannot reach " + url + ". Check the phone has internet (or office Wi-Fi for 192.168 addresses) and the office computer is running GreenCycle.";
                 }
                 final String err = error;
                 ui.post(new Runnable() {

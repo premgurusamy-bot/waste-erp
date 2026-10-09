@@ -3,14 +3,15 @@ import { brandingUrl } from "@/lib/appearance";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/server/auth/current-user";
 import { getAppearance } from "@/server/branding";
+import { googleEnabled } from "@/server/auth/google";
 import { LoginForm } from "./login-form";
 
 export const metadata = { title: "Sign in" };
 
-export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string }> }) {
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string; error?: string }> }) {
   if (await getCurrentUser()) redirect("/dashboard");
-  const { next } = await searchParams;
-  const [look, company] = await Promise.all([getAppearance(), prisma.company.findFirst({ select: { name: true } }).catch(() => null)]);
+  const { next, error } = await searchParams;
+  const [look, google, company] = await Promise.all([getAppearance(), googleEnabled(), prisma.company.findFirst({ select: { name: true } }).catch(() => null)]);
   const logo = brandingUrl(look.logo);
   const photo = brandingUrl(look.loginImage);
   const brand = (size: string) =>
@@ -62,7 +63,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
           </div>
           <h2 className="text-2xl font-semibold text-navy-800">Sign in</h2>
           <p className="mt-1 text-sm text-slate-500">Use the username and password given by your administrator.</p>
-          <LoginForm next={next} />
+          <LoginForm next={next} google={google} error={error?.slice(0, 300)} />
         </div>
       </div>
     </div>

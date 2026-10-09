@@ -1,6 +1,8 @@
 import { Pencil } from "lucide-react";
-import { appearanceAction, companyAction, licenseAction, sequenceAction, settingAction } from "@/app/actions/settings";
+import { accessAction, appearanceAction, companyAction, licenseAction, sequenceAction, settingAction } from "@/app/actions/settings";
 import { AppearanceForm } from "@/components/forms/appearance-form";
+import { AccessForm } from "@/components/forms/access-form";
+import { CALLBACK_PATH, getAccessConfig } from "@/server/auth/google";
 import { getAppearance } from "@/server/branding";
 import { FormDialog } from "@/components/forms/confirm-action";
 import { EntityForm } from "@/components/forms/entity-form";
@@ -29,13 +31,14 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   return (
     <>
       <PageHeader title="Settings" description="Company profile, document numbering and system options" />
-      <LinkTabs base="/settings" active={tab} tabs={[{ key: "company", label: "Company Profile" }, { key: "numbering", label: "Document Numbering" }, { key: "general", label: "General" }, { key: "appearance", label: "Appearance" }, { key: "system", label: "System & Backup" }, { key: "mobile", label: "Mobile App" }, { key: "licence", label: "Licence" }]} />
+      <LinkTabs base="/settings" active={tab} tabs={[{ key: "company", label: "Company Profile" }, { key: "numbering", label: "Document Numbering" }, { key: "general", label: "General" }, { key: "appearance", label: "Appearance" }, { key: "system", label: "System & Backup" }, { key: "mobile", label: "Mobile App" }, { key: "access", label: "Remote & Google Sign-in" }, { key: "licence", label: "Licence" }]} />
       {tab === "company" && <Company manage={manage} />}
       {tab === "numbering" && <Numbering manage={manage} />}
       {tab === "general" && <General manage={manage} />}
       {tab === "appearance" && <AppearanceTab manage={manage} />}
       {tab === "system" && <System />}
       {tab === "mobile" && <Mobile />}
+      {tab === "access" && <Access manage={manage} />}
       {tab === "licence" && <Licence manage={manage} />}
     </>
   );
@@ -183,7 +186,8 @@ async function Licence({ manage }: { manage: boolean }) {
 }
 
 async function Mobile() {
-  const addresses = lanAddresses(process.env.PORT || "3000");
+  const publicUrl = (await getAccessConfig()).publicUrl;
+  const addresses = [...(publicUrl ? [publicUrl] : []), ...lanAddresses(process.env.PORT || "3000")];
   const qrs = await Promise.all(addresses.map((a) => qrSvg(`${a}/mobile`)));
   return (
     <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
@@ -194,7 +198,7 @@ async function Mobile() {
             <div key={a} className="flex flex-wrap items-center gap-4">
               <div className="size-40 shrink-0 rounded-lg border border-slate-200 p-1" dangerouslySetInnerHTML={{ __html: qrs[i] }} />
               <div>
-                <p>Scan with the phone camera, or open in the phone browser:</p>
+                <p>{a.startsWith("https://") ? "Anywhere with internet (mobile data or any Wi-Fi):" : "Office Wi-Fi only:"} scan with the phone camera, or open in the phone browser:</p>
                 <p className="mt-1 font-mono text-base font-semibold text-navy-800">{a}/mobile</p>
                 <p className="mt-2">Server address to type in the app: <b className="font-mono">{a.replace("http://", "")}</b></p>
               </div>
@@ -224,5 +228,46 @@ async function AppearanceTab({ manage }: { manage: boolean }) {
       <p className="mb-5 text-sm text-slate-600">Make GreenCycle look like your company. Changes apply to every user{manage ? "" : ". Only an administrator can change them"}.</p>
       <AppearanceForm initial={a} disabled={!manage} action={appearanceAction} />
     </CardContent></Card>
+  );
+}
+
+async function Access({ manage }: { manage: boolean }) {
+  const cfg = await getAccessConfig();
+  const ready = Boolean(cfg.publicUrl && cfg.clientId && cfg.clientSecret);
+  const redirect = `${cfg.publicUrl || "https://erp.yourcompany.in"}${CALLBACK_PATH}`;
+  return (
+    <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+      <Section title="Settings">
+        <CardContent className="space-y-4 text-sm">
+          <p>
+            <Badge tone={ready ? "green" : "grey"}>{ready ? "Google sign-in is ON" : "Google sign-in is off"}</Badge>{" "}
+            {cfg.publicUrl && <span className="text-slate-600">Open from anywhere: <a href={cfg.publicUrl} className="font-medium text-brand-700 underline">{cfg.publicUrl}</a></span>}
+          </p>
+          <AccessForm publicUrl={cfg.publicUrl ?? ""} clientId={cfg.clientId ?? ""} hasSecret={Boolean(cfg.clientSecret)} disabled={!manage} action={accessAction} />
+          <p className="rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
+            Who can use Google sign-in: only users whose <b>Email</b> in <b>Users &amp; Roles</b> is their Gmail address. Anyone else is refused. Username and password keep working.
+          </p>
+        </CardContent>
+      </Section>
+      <Section title="How to set it up (once)">
+        <CardContent className="space-y-3 text-sm text-slate-600">
+          <p className="font-semibold text-navy-800">1. Open GreenCycle from anywhere</p>
+          <ol className="list-decimal space-y-1 pl-5">
+            <li>Buy a domain name (e.g. yourcompany.in) and add it to a free Cloudflare account.</li>
+            <li>On this computer double-click <b>SETUP-REMOTE-ACCESS.bat</b> and follow the questions.</li>
+            <li>Type the address it shows (e.g. https://erp.yourcompany.in) into <b>Public web address</b> here and save.</li>
+          </ol>
+          <p className="font-semibold text-navy-800">2. Turn on Sign in with Google</p>
+          <ol className="list-decimal space-y-1 pl-5">
+            <li>Open <b>console.cloud.google.com</b> with your Gmail, create a project “GreenCycle”.</li>
+            <li><b>APIs &amp; Services → OAuth consent screen</b>: External, app name GreenCycle, your email; then <b>Publish app</b>.</li>
+            <li><b>Credentials → Create credentials → OAuth client ID</b> → Web application.</li>
+            <li>Under <b>Authorised redirect URIs</b> add exactly:<br /><code className="break-all rounded bg-slate-100 px-1 text-xs text-navy-800">{redirect}</code></li>
+            <li>Copy the <b>Client ID</b> and <b>Client secret</b> into this page and save.</li>
+            <li>In <b>Users &amp; Roles</b>, put each person’s Gmail address in their <b>Email</b>.</li>
+          </ol>
+        </CardContent>
+      </Section>
+    </div>
   );
 }

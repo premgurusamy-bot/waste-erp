@@ -45,6 +45,7 @@ Sign in as `admin` with the `SEED_ADMIN_PASSWORD` you set. Demo users (`mgmt`, `
 - [SETUP.md](SETUP.md) – local installation step by step
 - [DATABASE.md](DATABASE.md) – schema, integrity rules, migrations, backup & restore
 - [USER_GUIDE.md](USER_GUIDE.md) – how each module is used, by role
+- [REMOTE_ACCESS.md](REMOTE_ACCESS.md) – open from anywhere (Cloudflare Tunnel) and Sign in with Google
 - [MOBILE.md](MOBILE.md) – Android app and iPhone home-screen app: install, uninstall, problems
 - [LICENSING.md](LICENSING.md) – licence keys and yearly renewal (vendor guide)
 - [API_DOCUMENTATION.md](API_DOCUMENTATION.md) – HTTP routes and server actions

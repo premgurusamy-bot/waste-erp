@@ -77,7 +77,7 @@ export function UserForm({ roles, user }: { roles: Role[]; user?: { id: string; 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {field("username", "Username", "text", true, !!user)}
         {field("name", "Full Name", "text", true)}
-        {field("email", "Email", "email")}
+        {field("email", "Email (Gmail for Google sign-in)", "email")}
         {field("mobile", "Mobile", "tel")}
         {!user && field("password", "Temporary Password", "password", true)}
         {user && (

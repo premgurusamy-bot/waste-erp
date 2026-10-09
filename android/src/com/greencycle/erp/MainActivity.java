@@ -82,6 +82,7 @@ public class MainActivity extends Activity {
         configureWebView();
 
         server = getSharedPreferences(PREFS, MODE_PRIVATE).getString(KEY_SERVER, null);
+        if (server != null && handleSignInLink(getIntent())) return;
         if (server == null) {
             startActivityForResult(new Intent(this, SetupActivity.class), REQ_SETUP);
         } else if (state != null) {
@@ -112,6 +113,16 @@ public class MainActivity extends Activity {
         web.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, String url) {
+                if (url.contains("/api/auth/google/start")) {
+                    // Google does not allow its sign-in inside apps; use the phone's browser, which hands back via greencycle://login.
+                    String ext = url + (url.contains("?") ? "&" : "?") + "app=1";
+                    try {
+                        startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(ext)));
+                    } catch (ActivityNotFoundException e) {
+                        toast("Install Google Chrome to sign in with Google.");
+                    }
+                    return true;
+                }
                 if (server != null && url.startsWith(server)) return false;
                 if (url.startsWith("about:") || url.startsWith("data:") || url.startsWith("blob:")) return false;
                 try {
@@ -160,6 +171,25 @@ public class MainActivity extends Activity {
         });
     }
 
+    // ---------- return from Google sign-in ----------
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        handleSignInLink(intent);
+    }
+
+    /** greencycle://login?code=… : finish the Google sign-in inside the app. */
+    boolean handleSignInLink(Intent intent) {
+        Uri data = intent == null ? null : intent.getData();
+        if (data == null || !"greencycle".equals(data.getScheme()) || server == null) return false;
+        String code = data.getQueryParameter("code");
+        if (code == null) return false;
+        web.loadUrl(server + "/api/auth/app-login?code=" + Uri.encode(code));
+        return true;
+    }
+
     // ---------- offline / error page ----------
 
     void showOffline(String reason) {
@@ -172,7 +202,7 @@ public class MainActivity extends Activity {
                 + "<div class=top><div style='font-size:13px;letter-spacing:.1em'>GREENCYCLE <b>ERP</b></div>"
                 + "<h2 style='margin:10px 0 0'>Cannot reach the server</h2></div>"
                 + "<div class=card><p>The app could not connect to <b>" + escape(server) + "</b>.</p><ol>"
-                + "<li>Is this phone on the <b>office Wi-Fi</b>?</li>"
+                + "<li>Does this phone have <b>internet</b>? If the address starts with 192.168, you must be on the <b>office Wi-Fi</b>.</li>"
                 + "<li>Is the office computer <b>switched on</b> with <b>START-WINDOWS</b> running?</li>"
                 + "<li>First time? On the office computer run <b>ALLOW-PHONES.bat</b> once.</li>"
                 + "<li>Has the office computer's address changed? Tap <b>Change server</b>.</li></ol>"
@@ -206,7 +236,7 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface
         public String version() {
-            return "1.0";
+            return "1.1";
         }
 
         @JavascriptInterface

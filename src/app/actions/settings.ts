@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { act } from "@/server/action";
 import { saveAppearance } from "@/server/branding";
 import { installLicense } from "@/server/license";
+import { saveAccessConfig } from "@/server/auth/google";
 import { setSetting, updateCompany, updateGstSettings, updateSequence } from "@/server/services/settings";
 
 export async function companyAction(values: Record<string, unknown>) {
@@ -25,4 +26,7 @@ export async function appearanceAction(values: Record<string, unknown>) {
   const r = await act((ctx) => saveAppearance(ctx, values));
   if (r.ok) revalidatePath("/", "layout"); // colours and layout apply to every page
   return r;
+}
+export async function accessAction(values: Record<string, unknown>) {
+  return act((ctx) => saveAccessConfig(ctx, values), ["/settings"]);
 }
