@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'" />
+<title>GRL ERP - First time setup</title>
+<style>
+  body { font-family: "Segoe UI", Arial, sans-serif; background: #1f3a5f; margin: 0; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+  .card { background: #fff; border-radius: 12px; padding: 26px 30px; width: 460px; box-shadow: 0 20px 50px rgba(0,0,0,.3); }
+  h1 { color: #1f3a5f; font-size: 20px; margin: 0 0 4px; }
+  p { color: #555; font-size: 13px; }
+  label { display: block; font-size: 12px; color: #555; margin-top: 10px; }
+  input { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid #c9d2de; border-radius: 6px; font-size: 14px; margin-top: 3px; }
+  .row { display: flex; gap: 10px; } .row > div { flex: 1; }
+  button { margin-top: 16px; padding: 10px 16px; border-radius: 6px; border: 1px solid #c9d2de; background: #fff; cursor: pointer; font-size: 14px; }
+  .primary { background: #1f3a5f; color: #fff; border-color: #1f3a5f; }
+  .msg { margin-top: 12px; padding: 10px; border-radius: 6px; font-size: 13px; display: none; }
+  .ok { background: #e6f5ec; color: #145a32; display: block; } .err { background: #fdecea; color: #7b241c; display: block; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>GRL ERP - First time setup</h1>
+  <p>Connect the ERP to PostgreSQL on this computer. Install PostgreSQL first (postgresql.org, keep the password you choose). The database <b>grl_erp</b> is created automatically.</p>
+  <div class="row">
+    <div><label>Server<input id="host" value="localhost" /></label></div>
+    <div><label>Port<input id="port" value="5432" /></label></div>
+  </div>
+  <div class="row">
+    <div><label>User<input id="user" value="postgres" /></label></div>
+    <div><label>Password<input id="password" type="password" /></label></div>
+  </div>
+  <label>Database name<input id="database" value="grl_erp" /></label>
+  <label>ERP port (phones connect to this)<input id="appPort" value="4000" /></label>
+  <div id="msg" class="msg"></div>
+  <button id="test">Test connection</button>
+  <button id="save" class="primary">Save and start</button>
+  <p style="margin-top:14px">Backups will be kept in <b id="bdir">Documents\G Road Lines ERP\Backup</b>.</p>
+</div>
+<script>
+  const $ = (id) => document.getElementById(id);
+  const cfg = () => ({ host: $("host").value.trim(), port: $("port").value.trim(), user: $("user").value.trim(), password: $("password").value, database: $("database").value.trim(), appPort: $("appPort").value.trim() });
+  const show = (ok, text) => { $("msg").className = "msg " + (ok ? "ok" : "err"); $("msg").textContent = text; };
+  window.grlSetup.info().then((i) => { if (i && i.backupDir) $("bdir").textContent = i.backupDir; });
+  $("test").onclick = async () => { show(true, "Testing..."); const r = await window.grlSetup.test(cfg()); show(r.ok, r.message); };
+  $("save").onclick = async () => { show(true, "Creating the database and starting the ERP..."); const r = await window.grlSetup.save(cfg()); if (!r.ok) show(false, r.message); };
+</script>
+</body>
+</html>

@@ -1,0 +1,67 @@
+{
+  "name": "grl-erp-desktop",
+  "productName": "GRL ERP",
+  "version": "1.0.0",
+  "description": "G Road Lines - Transport Agent ERP (Windows desktop)",
+  "main": "main.cjs",
+  "private": true,
+  "license": "UNLICENSED",
+  "author": "G Road Lines",
+  "scripts": {
+    "prepare-app": "node prepare.cjs",
+    "start": "npm run prepare-app && electron .",
+    "dist:win": "npm run prepare-app && electron-builder --win nsis"
+  },
+  "dependencies": {
+    "@prisma/client": "6.19.3",
+    "archiver": "^7.0.1",
+    "bcryptjs": "^3.0.3",
+    "cookie-parser": "^1.4.7",
+    "dotenv": "^16.6.1",
+    "exceljs": "4.4.0",
+    "express": "^5.2.1",
+    "express-rate-limit": "^7.5.1",
+    "helmet": "^8.3.0",
+    "jose": "^6.2.12",
+    "jszip": "^3.10.1",
+    "multer": "^2.4.0",
+    "pdfkit": "^0.17.2",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "electron": "^33.4.11",
+    "electron-builder": "^25.1.8",
+    "prisma": "6.19.3"
+  },
+  "build": {
+    "appId": "in.groadlines.erp",
+    "productName": "GRL ERP",
+    "copyright": "G Road Lines",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.cjs",
+      "preload.cjs",
+      "setup.html",
+      "server-dist/**",
+      "web/**",
+      "prisma/**",
+      "node_modules/**",
+      "package.json",
+      "icon.png"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "GRL ERP",
+      "deleteAppDataOnUninstall": false
+    },
+    "asar": false
+  }
+}

@@ -1,0 +1,668 @@
+// G Road Lines - Transport Agent ERP
+// Every business record has a permanent UUID `id` (used by Excel backup/restore to match records)
+// plus a human readable code such as TRP-000123. Row numbers are never used as identifiers.
+// Money: Decimal(14,2). Quantities/weights: Decimal(12,3). Calendar dates: @db.Date.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------- business data (backed up to Excel)
+
+model Company {
+  id            String   @id @default(uuid())
+  name          String
+  legalName     String?
+  gstin         String?
+  pan           String?
+  address       String?
+  city          String?
+  state         String?
+  stateCode     String?
+  pincode       String?
+  phone         String?
+  email         String?
+  bankName      String?
+  bankAccount   String?
+  bankIfsc      String?
+  invoicePrefix String   @default("INV")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("company")
+}
+
+model Setting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+
+  @@map("settings")
+}
+
+model Customer {
+  id             String   @id @default(uuid())
+  code           String   @unique
+  name           String
+  company        String?
+  gstin          String?
+  pan            String?
+  contactPerson  String?
+  mobile         String?
+  email          String?
+  address        String?
+  city           String?
+  state          String?
+  paymentTerms   String?
+  creditDays     Int      @default(30)
+  openingBalance Decimal  @default(0) @db.Decimal(14, 2)
+  status         String   @default("ACTIVE")
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  trips    Trip[]
+  invoices CustomerInvoice[]
+  receipts CustomerReceipt[]
+  rates    FreightRate[]
+
+  @@index([name])
+  @@index([mobile])
+  @@map("customers")
+}
+
+model Transporter {
+  id             String   @id @default(uuid())
+  code           String   @unique
+  name           String
+  contactPerson  String?
+  mobile         String?
+  gstin          String?
+  pan            String?
+  address        String?
+  city           String?
+  bankName       String?
+  bankAccount    String?
+  bankIfsc       String?
+  bankBranch     String?
+  upiId          String?
+  paymentTerms   String?
+  openingBalance Decimal  @default(0) @db.Decimal(14, 2)
+  status         String   @default("ACTIVE")
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  vehicles    Vehicle[]
+  drivers     Driver[]
+  trips       Trip[]
+  settlements TransporterSettlement[]
+  payments    TransporterPayment[]
+
+  @@index([name])
+  @@index([mobile])
+  @@map("transporters")
+}
+
+model Vehicle {
+  id              String    @id @default(uuid())
+  code            String    @unique
+  vehicleNumber   String    @unique
+  vehicleType     String?
+  capacityTons    Decimal?  @db.Decimal(12, 3)
+  ownerName       String?
+  ownership       String    @default("MARKET")
+  transporterId   String?
+  rcExpiry        DateTime? @db.Date
+  insuranceExpiry DateTime? @db.Date
+  fcExpiry        DateTime? @db.Date
+  permitExpiry    DateTime? @db.Date
+  pollutionExpiry DateTime? @db.Date
+  roadTaxExpiry   DateTime? @db.Date
+  status          String    @default("ACTIVE")
+  notes           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  transporter Transporter?      @relation(fields: [transporterId], references: [id])
+  trips       Trip[]
+  expenses    Expense[]
+  documents   VehicleDocument[]
+
+  @@index([transporterId])
+  @@map("vehicles")
+}
+
+model Driver {
+  id            String    @id @default(uuid())
+  code          String    @unique
+  name          String
+  mobile        String?
+  licenseNumber String?
+  licenseExpiry DateTime? @db.Date
+  address       String?
+  rate          Decimal   @default(0) @db.Decimal(14, 2)
+  rateType      String    @default("PER_TRIP")
+  transporterId String?
+  status        String    @default("ACTIVE")
+  notes         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  transporter Transporter?     @relation(fields: [transporterId], references: [id])
+  trips       Trip[]
+  expenses    Expense[]
+  documents   DriverDocument[]
+
+  @@index([name])
+  @@index([mobile])
+  @@map("drivers")
+}
+
+model LoadingPoint {
+  id            String   @id @default(uuid())
+  code          String   @unique
+  name          String
+  address       String?
+  city          String?
+  state         String?
+  pincode       String?
+  contactPerson String?
+  mobile        String?
+  status        String   @default("ACTIVE")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  trips Trip[]
+  rates FreightRate[]
+
+  @@map("loading_points")
+}
+
+model DeliveryPoint {
+  id            String   @id @default(uuid())
+  code          String   @unique
+  name          String
+  address       String?
+  city          String?
+  state         String?
+  pincode       String?
+  contactPerson String?
+  mobile        String?
+  status        String   @default("ACTIVE")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  trips Trip[]
+  rates FreightRate[]
+
+  @@map("delivery_points")
+}
+
+/// Freight rate card: what the customer is charged and what the transporter is paid on a route.
+model FreightRate {
+  id              String    @id @default(uuid())
+  code            String    @unique
+  customerId      String?
+  loadingPointId  String?
+  deliveryPointId String?
+  vehicleType     String?
+  rateType        String    @default("PER_TRIP")
+  customerRate    Decimal   @default(0) @db.Decimal(14, 2)
+  transporterRate Decimal   @default(0) @db.Decimal(14, 2)
+  effectiveFrom   DateTime? @db.Date
+  effectiveTo     DateTime? @db.Date
+  status          String    @default("ACTIVE")
+  notes           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  customer      Customer?      @relation(fields: [customerId], references: [id])
+  loadingPoint  LoadingPoint?  @relation(fields: [loadingPointId], references: [id])
+  deliveryPoint DeliveryPoint? @relation(fields: [deliveryPointId], references: [id])
+
+  @@map("freight_rates")
+}
+
+model Trip {
+  id               String    @id @default(uuid())
+  tripNumber       String    @unique
+  tripDate         DateTime  @db.Date
+  customerId       String
+  transporterId    String?
+  vehicleId        String?
+  driverId         String?
+  loadingPointId   String?
+  deliveryPointId  String?
+  material         String?
+  quantity         Decimal?  @db.Decimal(12, 3)
+  unit             String?
+  weightTons       Decimal?  @db.Decimal(12, 3)
+  distanceKm       Decimal?  @db.Decimal(10, 1)
+  lrNumber         String?
+  lrDate           DateTime? @db.Date
+  ewayBillNumber   String?
+  ewayBillExpiry   DateTime? @db.Date
+  customerFreight  Decimal   @default(0) @db.Decimal(14, 2)
+  transporterHire  Decimal   @default(0) @db.Decimal(14, 2)
+  loadingCharges   Decimal   @default(0) @db.Decimal(14, 2)
+  unloadingCharges Decimal   @default(0) @db.Decimal(14, 2)
+  diesel           Decimal   @default(0) @db.Decimal(14, 2)
+  toll             Decimal   @default(0) @db.Decimal(14, 2)
+  rto              Decimal   @default(0) @db.Decimal(14, 2)
+  driverBata       Decimal   @default(0) @db.Decimal(14, 2)
+  otherExpense     Decimal   @default(0) @db.Decimal(14, 2)
+  advance          Decimal   @default(0) @db.Decimal(14, 2)
+  status           String    @default("BOOKED")
+  deliveredDate    DateTime? @db.Date
+  podReceivedDate  DateTime? @db.Date
+  cancelReason     String?
+  remarks          String?
+  createdBy        String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  customer      Customer               @relation(fields: [customerId], references: [id])
+  transporter   Transporter?           @relation(fields: [transporterId], references: [id])
+  vehicle       Vehicle?               @relation(fields: [vehicleId], references: [id])
+  driver        Driver?                @relation(fields: [driverId], references: [id])
+  loadingPoint  LoadingPoint?          @relation(fields: [loadingPointId], references: [id])
+  deliveryPoint DeliveryPoint?         @relation(fields: [deliveryPointId], references: [id])
+  items         TripItem[]
+  expenses      Expense[]
+  invoiceItems  InvoiceItem[]
+  settlement    TransporterSettlement?
+
+  @@index([tripDate])
+  @@index([customerId, tripDate])
+  @@index([transporterId])
+  @@index([vehicleId])
+  @@index([driverId])
+  @@index([status])
+  @@index([lrNumber])
+  @@map("trips")
+}
+
+model TripItem {
+  id          String   @id @default(uuid())
+  tripId      String
+  lineNo      Int      @default(1)
+  description String?
+  material    String?
+  packages    Int?
+  quantity    Decimal? @db.Decimal(12, 3)
+  unit        String?
+  weightTons  Decimal? @db.Decimal(12, 3)
+  invoiceRef  String?
+  value       Decimal? @db.Decimal(14, 2)
+
+  trip Trip @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  @@index([tripId])
+  @@map("trip_items")
+}
+
+model Expense {
+  id            String   @id @default(uuid())
+  code          String   @unique
+  expenseDate   DateTime @db.Date
+  category      String
+  amount        Decimal  @db.Decimal(14, 2)
+  tripId        String?
+  vehicleId     String?
+  driverId      String?
+  payee         String?
+  paymentMode   String   @default("CASH")
+  paymentStatus String   @default("PAID")
+  reference     String?
+  description   String?
+  status        String   @default("ACTIVE")
+  createdBy     String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  trip    Trip?    @relation(fields: [tripId], references: [id])
+  vehicle Vehicle? @relation(fields: [vehicleId], references: [id])
+  driver  Driver?  @relation(fields: [driverId], references: [id])
+
+  @@index([expenseDate])
+  @@index([tripId])
+  @@index([category])
+  @@map("expenses")
+}
+
+model CustomerInvoice {
+  id             String    @id @default(uuid())
+  invoiceNumber  String    @unique
+  invoiceDate    DateTime  @db.Date
+  dueDate        DateTime? @db.Date
+  customerId     String
+  freightAmount  Decimal   @default(0) @db.Decimal(14, 2)
+  otherCharges   Decimal   @default(0) @db.Decimal(14, 2)
+  taxableValue   Decimal   @default(0) @db.Decimal(14, 2)
+  gstType        String    @default("NONE")
+  gstRate        Decimal   @default(0) @db.Decimal(5, 2)
+  cgst           Decimal   @default(0) @db.Decimal(14, 2)
+  sgst           Decimal   @default(0) @db.Decimal(14, 2)
+  igst           Decimal   @default(0) @db.Decimal(14, 2)
+  roundOff       Decimal   @default(0) @db.Decimal(14, 2)
+  total          Decimal   @default(0) @db.Decimal(14, 2)
+  placeOfSupply  String?
+  status         String    @default("ISSUED")
+  notes          String?
+  createdBy      String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  customer Customer          @relation(fields: [customerId], references: [id])
+  items    InvoiceItem[]
+  receipts CustomerReceipt[]
+
+  @@index([customerId, invoiceDate])
+  @@index([invoiceDate])
+  @@map("customer_invoices")
+}
+
+model InvoiceItem {
+  id          String  @id @default(uuid())
+  invoiceId   String
+  tripId      String?
+  lineNo      Int     @default(1)
+  description String
+  sacCode     String?
+  amount      Decimal @db.Decimal(14, 2)
+
+  invoice CustomerInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  trip    Trip?           @relation(fields: [tripId], references: [id])
+
+  @@index([invoiceId])
+  @@index([tripId])
+  @@map("invoice_items")
+}
+
+model CustomerReceipt {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  receiptDate DateTime @db.Date
+  customerId  String
+  invoiceId   String?
+  amount      Decimal  @db.Decimal(14, 2)
+  tdsAmount   Decimal  @default(0) @db.Decimal(14, 2)
+  mode        String   @default("BANK")
+  reference   String?
+  notes       String?
+  status      String   @default("ACTIVE")
+  createdBy   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  customer Customer         @relation(fields: [customerId], references: [id])
+  invoice  CustomerInvoice? @relation(fields: [invoiceId], references: [id])
+
+  @@index([customerId])
+  @@index([invoiceId])
+  @@index([receiptDate])
+  @@map("customer_receipts")
+}
+
+/// One settlement per trip with a transporter. Hire and advance come from the trip;
+/// balance = hire - advance - deductions - payments.
+model TransporterSettlement {
+  id             String    @id @default(uuid())
+  code           String    @unique
+  tripId         String    @unique
+  transporterId  String
+  deductions     Decimal   @default(0) @db.Decimal(14, 2)
+  deductionNote  String?
+  settlementDate DateTime? @db.Date
+  status         String    @default("PENDING")
+  remarks        String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  trip        Trip                 @relation(fields: [tripId], references: [id])
+  transporter Transporter          @relation(fields: [transporterId], references: [id])
+  payments    TransporterPayment[]
+
+  @@index([transporterId])
+  @@map("transporter_settlements")
+}
+
+model TransporterPayment {
+  id            String   @id @default(uuid())
+  code          String   @unique
+  paymentDate   DateTime @db.Date
+  transporterId String
+  settlementId  String?
+  amount        Decimal  @db.Decimal(14, 2)
+  mode          String   @default("BANK")
+  reference     String?
+  notes         String?
+  status        String   @default("ACTIVE")
+  createdBy     String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  transporter Transporter            @relation(fields: [transporterId], references: [id])
+  settlement  TransporterSettlement? @relation(fields: [settlementId], references: [id])
+
+  @@index([transporterId])
+  @@index([settlementId])
+  @@index([paymentDate])
+  @@map("transporter_payments")
+}
+
+/// Uploaded file. `entityType` + `entityId` link it to a trip, vehicle, driver, expense, invoice...
+model Document {
+  id         String   @id @default(uuid())
+  code       String   @unique
+  docType    String
+  entityType String?
+  entityId   String?
+  fileName   String
+  storedName String
+  mimeType   String
+  sizeBytes  Int
+  sha256     String
+  notes      String?
+  uploadedBy String?
+  createdAt  DateTime @default(now())
+
+  vehicleDocuments VehicleDocument[]
+  driverDocuments  DriverDocument[]
+
+  @@index([entityType, entityId])
+  @@map("documents")
+}
+
+model VehicleDocument {
+  id         String    @id @default(uuid())
+  vehicleId  String
+  docType    String
+  docNumber  String?
+  issueDate  DateTime? @db.Date
+  expiryDate DateTime? @db.Date
+  documentId String?
+  notes      String?
+  createdAt  DateTime  @default(now())
+
+  vehicle  Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  document Document? @relation(fields: [documentId], references: [id])
+
+  @@index([vehicleId])
+  @@map("vehicle_documents")
+}
+
+model DriverDocument {
+  id         String    @id @default(uuid())
+  driverId   String
+  docType    String
+  docNumber  String?
+  issueDate  DateTime? @db.Date
+  expiryDate DateTime? @db.Date
+  documentId String?
+  notes      String?
+  createdAt  DateTime  @default(now())
+
+  driver   Driver    @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  document Document? @relation(fields: [documentId], references: [id])
+
+  @@index([driverId])
+  @@map("driver_documents")
+}
+
+model Target {
+  id        String   @id @default(uuid())
+  period    String
+  metric    String   @default("PROFIT")
+  startDate DateTime @db.Date
+  endDate   DateTime @db.Date
+  amount    Decimal  @db.Decimal(14, 2)
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([period, startDate])
+  @@map("targets")
+}
+
+model Notification {
+  id         String    @id @default(uuid())
+  key        String    @unique
+  type       String
+  severity   String
+  title      String
+  message    String
+  entityType String?
+  entityId   String?
+  dueDate    DateTime? @db.Date
+  readAt     DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  at         DateTime @default(now())
+  userId     String?
+  userName   String?
+  action     String
+  entityType String?
+  entityId   String?
+  recordCode String?
+  oldValue   Json?
+  newValue   Json?
+  ip         String?
+  device     String?
+
+  @@index([at])
+  @@index([entityType, entityId])
+  @@map("audit_logs")
+}
+
+// ---------------------------------------------------------------- system data (not part of the business restore)
+
+model User {
+  id             String    @id @default(uuid())
+  username       String    @unique
+  name           String
+  mobile         String?
+  email          String?
+  passwordHash   String
+  role           String
+  active         Boolean   @default(true)
+  failedLogins   Int       @default(0)
+  lockedUntil    DateTime?
+  sessionVersion Int       @default(1)
+  lastLoginAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@map("users")
+}
+
+model RolePermission {
+  role       String
+  permission String
+  allowed    Boolean
+
+  @@id([role, permission])
+  @@map("role_permissions")
+}
+
+model Sequence {
+  name  String @id
+  value Int    @default(0)
+
+  @@map("sequences")
+}
+
+model BackupRecord {
+  id          String    @id @default(uuid())
+  backupId    String    @unique
+  type        String
+  fileName    String
+  filePath    String
+  dbFileName  String?
+  sizeBytes   Int       @default(0)
+  records     Int       @default(0)
+  checksum    String?
+  status      String
+  verified    Boolean   @default(false)
+  verifiedAt  DateTime?
+  message     String?
+  createdBy   String?
+  createdAt   DateTime  @default(now())
+  /// Google Drive copy: NONE / PENDING / UPLOADED / FAILED
+  driveStatus     String    @default("NONE")
+  driveFileId     String?
+  driveDbFileId   String?
+  driveUploadedAt DateTime?
+  driveError      String?
+
+  @@index([createdAt])
+  @@map("backup_records")
+}
+
+model RestoreRecord {
+  id               String    @id @default(uuid())
+  fileName         String
+  mode             String
+  status           String
+  dryRun           Boolean   @default(false)
+  preRestoreBackup String?
+  snapshotFile     String?
+  summary          Json?
+  message          String?
+  rolledBack       Boolean   @default(false)
+  createdBy        String?
+  startedAt        DateTime  @default(now())
+  finishedAt       DateTime?
+
+  @@index([startedAt])
+  @@map("restore_records")
+}
+
+model License {
+  id          String   @id @default(uuid())
+  licenseId   String
+  licenseKey  String
+  company     String
+  machineId   String?
+  plan        String
+  startDate   DateTime @db.Date
+  expiryDate  DateTime? @db.Date
+  maxUsers    Int?
+  status      String   @default("ACTIVE")
+  installedBy String?
+  installedAt DateTime @default(now())
+
+  @@map("licenses")
+}

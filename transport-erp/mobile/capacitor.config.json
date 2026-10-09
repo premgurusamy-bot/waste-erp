@@ -1,0 +1,13 @@
+{
+  "appId": "in.groadlines.erp",
+  "appName": "GRL ERP",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "http",
+    "cleartext": true,
+    "allowNavigation": ["*"]
+  },
+  "android": {
+    "allowMixedContent": true
+  }
+}

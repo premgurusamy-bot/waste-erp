@@ -1,5 +1,8 @@
 # GreenCycle Waste Management ERP
 
+> **G Road Lines – Transport Agent ERP** is a separate application in [`transport-erp/`](transport-erp/README.md)
+> (Windows desktop app, Android app, Excel backup & restore). The waste ERP below is unchanged.
+
 A complete ERP for a **non-hazardous waste management company**: customers and sites, contracts and versioned rates, pickups, collection scheduling, field collection (mobile), weighbridge, segregation/processing, inventory, recyclable sales, purchases, expenses, fleet, customer billing, receipts, outstanding & ageing, double-entry accounts, GST, 23 reports, dashboard, documents, notifications, users/roles and a full audit trail.
 
 > Scope: general / municipal / industrial **non-hazardous** waste and recyclables only. There are no hazardous-waste or e-waste workflows.
