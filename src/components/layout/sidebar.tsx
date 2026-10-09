@@ -60,7 +60,7 @@ export function Sidebar({ nav, company }: { nav: NavGroup[]; company: string }) 
             </div>
           ))}
         </nav>
-        <p className="border-t border-white/10 px-4 py-3 text-[10px] text-navy-400">v1.0 · Non-hazardous waste</p>
+        <p className="border-t border-white/10 px-4 py-3 text-[10px] text-navy-400">v1.2 · Non-hazardous waste</p>
       </aside>
     </>
   );

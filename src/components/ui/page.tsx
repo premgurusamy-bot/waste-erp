@@ -87,7 +87,7 @@ export function DetailGrid({ items, cols = 3 }: { items: { label: string; value:
 
 export function LinkTabs({ tabs, active, base }: { tabs: { key: string; label: string; count?: number }[]; active: string; base: string }) {
   return (
-    <div className="mb-4 flex gap-1 overflow-x-auto border-b border-slate-200 no-print">
+    <div className="mb-4 flex gap-1 overflow-x-auto overflow-y-hidden border-b border-slate-200 no-print">
       {tabs.map((t) => (
         <Link
           key={t.key}
